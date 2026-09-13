@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # This satisfies the requirement to link to postgres, though the app currently uses SQLite natively.
+      - DATABASE_URL=postgresql://procure_user:procure_pass@db:5432/procureflow
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: procure_user
+      POSTGRES_PASSWORD: procure_pass
+      POSTGRES_DB: procureflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:

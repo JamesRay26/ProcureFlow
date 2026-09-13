@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Organization {
+  id             String          @id @default(uuid())
+  name           String          @unique
+  createdAt      DateTime        @default(now())
+  members        User[]
+  invitations    Invitation[]
+  inventoryItems InventoryItem[]
+  requests       Request[]
+  auditLogs      AuditLog[]
+}
+
+model User {
+  id             String        @id @default(uuid())
+  email          String        @unique
+  passwordHash   String        
+  name           String
+  role           String        // ADMIN, PROCUREMENT_MANAGER, WAREHOUSE_STAFF, AUDITOR
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  requests       Request[]     @relation("RequestsCreated")
+  auditLogs      AuditLog[]
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  email          String
+  role           String
+  token          String       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  expiresAt      DateTime
+}
+
+model InventoryItem {
+  id             String       @id @default(uuid())
+  sku            String
+  name           String
+  category       String
+  stock          Int          @default(0)
+  maxStock       Int          @default(100)
+  threshold      Int          @default(10)
+  warehouse      String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  requests       Request[]
+  
+  @@unique([sku, organizationId])
+}
+
+model Request {
+  id             String        @id @default(uuid())
+  quantity       Int
+  priority       String        // Low, Medium, High
+  justification  String?
+  status         String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt      DateTime      @default(now())
+  
+  // Relations
+  itemId         String
+  item           InventoryItem @relation(fields: [itemId], references: [id])
+  
+  requestedById  String
+  requestedBy    User          @relation("RequestsCreated", fields: [requestedById], references: [id])
+  
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  actionType     String       // CREATION, APPROVAL, REJECTION, ROLE_CHANGE
+  description    String
+  ipAddress      String?
+  requestId      String?
+  createdAt      DateTime     @default(now())
+  
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+}
