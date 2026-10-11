@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import InventoryExportButton from '@/components/InventoryExportButton';
 
 export default async function InventoryPage() {
   const user = await getCurrentUser();
@@ -46,9 +47,7 @@ export default async function InventoryPage() {
           <p className="text-slate-500 font-medium mt-1 dark:text-slate-400">Track and manage all warehouse inventory items</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold transition-colors">
-            Export CSV
-          </button>
+          <InventoryExportButton items={items} />
           <a href="/dashboard/inventory/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors">
             <Plus className="w-5 h-5" /> Add Item
           </a>
