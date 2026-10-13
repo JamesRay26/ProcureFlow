@@ -1,5 +1,6 @@
+import { can } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
-import { Plus, Filter, Search, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Plus, Filter, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCurrentUser } from '@/lib/session';
 import { redirect } from 'next/navigation';
 
@@ -36,9 +37,9 @@ export default async function RequestsPage() {
           <button className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold transition-colors">
             <Filter className="w-5 h-5" /> Filter
           </button>
-          <a href="/dashboard/requests/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors">
+          {can(user.role, 'request:create') && (<a href="/dashboard/requests/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors">
             <Plus className="w-5 h-5" /> New Request
-          </a>
+          </a>)}
         </div>
       </div>
 

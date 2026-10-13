@@ -148,6 +148,14 @@ function AuthContent() {
             </button>
           </form>
         )}
+        {process.env.NODE_ENV === 'development' && (
+          <form action="/api/auth/development" method="POST" className="mt-6 border-t border-slate-200 pt-5">
+            <button type="submit" className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 transition-colors hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+              Local Development Access
+            </button>
+            <p className="mt-2 text-center text-xs text-slate-500">Enter the local development workspace as an administrator.</p>
+          </form>
+        )}
       </div>
     </div>
   );

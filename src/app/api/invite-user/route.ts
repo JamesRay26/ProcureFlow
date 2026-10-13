@@ -1,43 +1,22 @@
+import { getCurrentUser } from '@/lib/session';
+import { can, roles } from '@/lib/rbac';
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { cookies } from 'next/headers';
 import crypto from 'crypto';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import nodemailer from 'nodemailer';
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies();
-    let adminId = cookieStore.get('session_user')?.value;
-    
-    // Fallback: If logged in via Google, fetch from NextAuth session
-    if (!adminId) {
-      const session = await getServerSession(authOptions);
-      if (session?.user?.email) {
-        const dbUser = await prisma.user.findUnique({ where: { email: session.user.email } });
-        if (dbUser) adminId = dbUser.id;
-      }
-    }
-
-    if (!adminId) {
-      return NextResponse.redirect(new URL('/?error=unauthorized', request.url));
-    }
-
-    const admin = await prisma.user.findUnique({ 
-      where: { id: adminId },
-      include: { organization: true }
-    });
-
-    if (!admin || admin.role !== 'ADMIN' || !admin.organizationId) {
-      return NextResponse.redirect(new URL('/dashboard?error=forbidden', request.url));
+    const admin = await getCurrentUser();
+    if (!admin || !admin.organizationId || !can(admin.role, 'team:manage')) {
+      return new NextResponse('Forbidden', { status: 403 });
     }
 
     const formData = await request.formData();
     const email = formData.get('email') as string;
     const role = formData.get('role') as string;
 
-    if (!email || !role) {
+    if (!email || !roles.some(option => option.value === role)) {
       return NextResponse.redirect(new URL('/dashboard?error=missing_fields', request.url));
     }
 
@@ -72,7 +51,7 @@ export async function POST(request: Request) {
       });
     } else {
       // Otherwise, fallback to the Ethereal testing sandbox
-      let testAccount = await nodemailer.createTestAccount();
+      const testAccount = await nodemailer.createTestAccount();
       transporter = nodemailer.createTransport({
         host: "smtp.ethereal.email",
         port: 587,
@@ -86,7 +65,7 @@ export async function POST(request: Request) {
 
     const senderEmail = process.env.SMTP_EMAIL || '"ProcureFlow Notifications" <noreply@procureflow.com>';
 
-    let info = await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: senderEmail,
       to: email,
       subject: `You have been invited to join ${admin.organization?.name} on ProcureFlow!`,

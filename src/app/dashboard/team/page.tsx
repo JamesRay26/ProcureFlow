@@ -1,35 +1,11 @@
-import { cookies } from 'next/headers';
+import { getCurrentUser } from '@/lib/session';
+import { can } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
-import prisma from '@/lib/prisma';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { UserPlus } from 'lucide-react';
 
 export default async function TeamPage({ searchParams }: { searchParams: { invite?: string, email?: string, error?: string } }) {
-  const session = await getServerSession(authOptions);
-  const cookieStore = cookies();
-  const manualUserId = cookieStore.get('session_user')?.value;
-
-  if (!session && !manualUserId) {
-    redirect('/');
-  }
-
-  let user = null;
-  if (session?.user?.email) {
-    user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: { organization: { include: { members: true } } }
-    });
-  } else if (manualUserId) {
-    user = await prisma.user.findUnique({
-      where: { id: manualUserId },
-      include: { organization: { include: { members: true } } }
-    });
-  }
-
-  if (!user || (user.role !== 'SYSTEM_ADMIN' && user.role !== 'ADMIN')) {
-    redirect('/dashboard');
-  }
+  const user = await getCurrentUser();
+  if (!user || !can(user.role, 'team:manage') || !user.organizationId) redirect('/dashboard');
 
   return (
     <>

@@ -1,8 +1,9 @@
-import { cookies } from 'next/headers';
+import { getCurrentUser } from '@/lib/session';
+import { can, isLocalDeveloper } from '@/lib/rbac';
+import { headers } from 'next/headers';
+import DeveloperRoleMenu from '@/components/DeveloperRoleMenu';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
 import { Boxes, LogOut } from 'lucide-react';
 import SidebarNav from '@/components/SidebarNav';
 
@@ -11,30 +12,15 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = cookies();
-  let userId = cookieStore.get('session_user')?.value;
-  
-  if (!userId) {
-    const session = await getServerSession(authOptions);
-    if (session?.user?.email) {
-      let dbUser = await prisma.user.findUnique({ where: { email: session.user.email } });
-      if (dbUser) userId = dbUser.id;
-    }
-  }
-
-  if (!userId) redirect('/');
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { organization: true }
-  });
+  const user = await getCurrentUser();
+  if (!user) redirect('/');
 
   if (!user || !user.organization) {
     return <div className="min-h-screen flex items-center justify-center p-6 text-center bg-slate-50">{children}</div>;
   }
 
-  const isAdmin = user.role === 'ADMIN';
-  const isManager = user.role === 'PROCUREMENT_MANAGER';
+  const isAdmin = can(user.role, 'team:manage');
+  const isManager = can(user.role, 'request:approve');
 
   let pendingApprovalsCount = 0;
   if (isAdmin || isManager) {
@@ -60,7 +46,7 @@ export default async function DashboardLayout({
           </div>
         </div>
 
-        <SidebarNav isAdmin={isAdmin} isManager={isManager} pendingApprovalsCount={pendingApprovalsCount} />
+        <SidebarNav canAudit={can(user.role, 'audit:read')} isAdmin={isAdmin} isManager={isManager} pendingApprovalsCount={pendingApprovalsCount} />
 
         <div className="pt-6 border-t border-slate-100 dark:border-slate-800 mt-auto">
           <form action="/api/auth/logout" method="POST">
@@ -96,6 +82,7 @@ export default async function DashboardLayout({
             </button>
 
             {/* User Profile */}
+            {isLocalDeveloper(user, headers().get('host')) ? <DeveloperRoleMenu name={user.name} role={user.role} /> : (
             <div className="flex items-center gap-3 pl-6 border-l border-slate-200 dark:border-slate-800">
               <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold shadow-sm">
                 {user.name.charAt(0)}
@@ -108,6 +95,7 @@ export default async function DashboardLayout({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </div>
+            )}
           </div>
         </header>
 

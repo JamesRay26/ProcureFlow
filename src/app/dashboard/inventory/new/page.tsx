@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createInventoryItem } from '@/app/actions';
-import { Save, X } from 'lucide-react';
+import { Save } from 'lucide-react';
 import Link from 'next/link';
 
 export default function NewInventoryItemPage() {
@@ -20,8 +20,8 @@ export default function NewInventoryItemPage() {
       const formData = new FormData(e.currentTarget);
       await createInventoryItem(formData);
       router.push('/dashboard/inventory');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create item');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create item');
     } finally {
       setLoading(false);
     }

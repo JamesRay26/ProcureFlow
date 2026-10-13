@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Package, FileText, CheckCircle, ScrollText, Users, Settings } from 'lucide-react';
 
-export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount = 0 }: { isAdmin: boolean, isManager: boolean, pendingApprovalsCount?: number }) {
+export default function SidebarNav({ isAdmin, isManager, canAudit, pendingApprovalsCount = 0 }: { isAdmin: boolean, isManager: boolean, canAudit: boolean, pendingApprovalsCount?: number }) {
   const pathname = usePathname();
 
-  const navItems = [
+  const navItems: { name: string; href: string; icon: typeof LayoutDashboard; exact?: boolean; badge?: number }[] = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true },
     { name: 'Inventory', href: '/dashboard/inventory', icon: Package },
     { name: 'Requests', href: '/dashboard/requests', icon: FileText },
@@ -19,10 +19,10 @@ export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount =
       href: '/dashboard/approvals', 
       icon: CheckCircle, 
       badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined 
-    } as any);
+    });
   }
 
-  navItems.push({ name: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText });
+  if (canAudit) navItems.push({ name: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText });
 
   const isActive = (href: string, exact: boolean = false) => {
     if (exact) {
@@ -34,7 +34,7 @@ export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount =
   return (
     <>
       <nav className="flex-1 flex flex-col gap-2">
-        {navItems.map((item: any) => {
+        {navItems.map((item) => {
           const active = isActive(item.href, item.exact);
           return (
             <Link 
