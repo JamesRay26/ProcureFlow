@@ -16,8 +16,8 @@ export default function NewRequestPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
-  const [items, setItems] = useState<any[]>([]);
-  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [items, setItems] = useState<Array<{ id: string; name: string; sku: string; [key: string]: unknown }>>([]);
+  const [selectedItem, setSelectedItem] = useState<{ id: string; name: string; sku: string; [key: string]: unknown } | null>(null);
 
   useEffect(() => {
     // Basic inline fetch for available items
@@ -46,8 +46,8 @@ export default function NewRequestPage() {
       formData.append('quantity', quantity.toString());
       await createRequest(formData);
       router.push('/dashboard/requests');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create request');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Failed to create request');
     } finally {
       setLoading(false);
     }

@@ -10,14 +10,18 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@types/leaflet": "^1.9.22",
     "bcryptjs": "^3.0.3",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.45.0",
     "next": "14.2.35",
     "next-auth": "^4.24.15",
     "next-themes": "^0.4.6",
     "nodemailer": "^7.0.13",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "react-leaflet": "^4.2.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",
@@ -31,8 +35,12 @@
     "postcss": "^8",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vite": "^8.3.0",
     "vitest": "^5.0.0"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
   }
 }

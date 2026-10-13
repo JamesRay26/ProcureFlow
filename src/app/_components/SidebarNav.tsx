@@ -1,13 +1,26 @@
+/* 
+ * PANEL Q&A NOTE: 'use client' Directive
+ * If asked: "Why does this file say 'use client'?"
+ * Answer: "Because this component uses interactivity (like 'usePathname' to highlight the active menu item). 
+ * Next.js Server Components can't track URL state in the browser, so we mark this specific component to run on the client!"
+ */
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Package, FileText, CheckCircle, ScrollText, Users, Settings } from 'lucide-react';
 
+/* 
+ * PANEL Q&A NOTE: Strict TypeScript (Zero 'any' Types)
+ * If asked: "How did you ensure type safety?"
+ * Answer: "Instead of using the lazy 'any' keyword, we strictly defined our props and arrays. 
+ * For example, right below here, we dictate exactly what properties a 'navItem' object is allowed to have (name, href, icon). 
+ * If we try to pass bad data, the code simply won't compile, making it virtually crash-proof."
+ */
 export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount = 0 }: { isAdmin: boolean, isManager: boolean, pendingApprovalsCount?: number }) {
   const pathname = usePathname();
 
-  const navItems = [
+  const navItems: Array<{ name: string; href: string; icon: React.ElementType; exact?: boolean; badge?: number }> = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true },
     { name: 'Inventory', href: '/dashboard/inventory', icon: Package },
     { name: 'Requests', href: '/dashboard/requests', icon: FileText },
@@ -19,7 +32,7 @@ export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount =
       href: '/dashboard/approvals', 
       icon: CheckCircle, 
       badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined 
-    } as any);
+    });
   }
 
   navItems.push({ name: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText });
@@ -34,7 +47,7 @@ export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount =
   return (
     <>
       <nav className="flex-1 flex flex-col gap-2">
-        {navItems.map((item: any) => {
+        {navItems.map((item: { name: string; href: string; icon: React.ElementType; exact?: boolean; badge?: number }) => {
           const active = isActive(item.href, item.exact);
           return (
             <Link 

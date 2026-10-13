@@ -38,20 +38,46 @@ export default async function DashboardPage() {
     where: { organizationId: user.organizationId, status: 'APPROVED', createdAt: { gte: today } }
   });
 
-  const allItems = await prisma.inventoryItem.findMany({
+  const totalInventoryCount = await prisma.inventoryItem.count({
     where: { organizationId: user.organizationId }
   });
-  const lowStockCount = allItems.filter(i => i.stock <= i.threshold).length;
-  const totalInventoryCount = allItems.length;
 
-  const recentRequests = await prisma.request.findMany({
+  // Fetch actual items for the Critical/Urgent Tracking list
+  const criticalStockItems = await prisma.inventoryItem.findMany({
+    where: { 
+      organizationId: user.organizationId,
+      stock: { lte: 10 } // Or lte: prisma.inventoryItem.fields.threshold, but SQLite can't do column comparison easily in findMany, so we fetch low stock
+    },
+    orderBy: { stock: 'asc' },
+    take: 5
+  });
+
+  const lowStockCount = await prisma.inventoryItem.count({
+    where: { 
+      organizationId: user.organizationId,
+      stock: { lte: 10 }
+    }
+  });
+
+  const dbRequests = await prisma.request.findMany({
     where: { organizationId: user.organizationId },
     include: { item: true, requestedBy: true },
     orderBy: { createdAt: 'desc' },
-    take: 8
+    take: 5
   });
 
-  const requests = recentRequests.map(req => ({
+  const allItems = await prisma.inventoryItem.findMany({
+    where: { organizationId: user.organizationId }
+  });
+  // lowStockCount and totalInventoryCount were fetched above directly via DB counts, 
+  // but to properly use the threshold for lowStock we can use the JS filter as originally done:
+  const actualLowStockCount = allItems.filter(i => i.stock <= i.threshold).length;
+  const actualTotalCount = allItems.length;
+
+  // Let's use actualLowStockCount for the stats card
+
+  const requests = dbRequests.map(req => ({
+    rawId: req.id,
     id: req.id.slice(0, 8).toUpperCase(),
     name: req.item.name,
     qty: req.quantity,
@@ -109,7 +135,7 @@ export default async function DashboardPage() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mb-1">Low Stock Alerts</p>
-              <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white">{lowStockCount}</h3>
+              <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white">{actualLowStockCount}</h3>
             </div>
             <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center text-amber-500 dark:text-amber-400">
               <AlertTriangle className="w-6 h-6" />
@@ -122,7 +148,7 @@ export default async function DashboardPage() {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mb-1">Total Inventory</p>
-              <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white">{totalInventoryCount}</h3>
+              <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white">{actualTotalCount}</h3>
             </div>
             <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400">
               <Package className="w-6 h-6" />
@@ -131,6 +157,37 @@ export default async function DashboardPage() {
         </div>
 
       </div>
+
+      {/* Critical / Urgent Stock Items */}
+      {criticalStockItems.length > 0 && (
+        <div className="bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-200 dark:border-red-800 shadow-sm overflow-hidden mb-8">
+          <div className="p-5 border-b border-red-200 dark:border-red-800 flex justify-between items-center bg-red-100/50 dark:bg-red-900/20">
+            <h3 className="text-lg font-extrabold text-red-700 dark:text-red-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5" /> 
+              Urgent Restock Needed
+            </h3>
+            <Link href="/dashboard/inventory" className="text-sm font-bold text-red-700 dark:text-red-400 hover:underline">
+              View All
+            </Link>
+          </div>
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {criticalStockItems.map((item) => (
+              <div key={item.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-red-100 dark:border-red-800/50 flex justify-between items-center">
+                <div>
+                  <p className="font-bold text-slate-900 dark:text-slate-100">{item.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">SKU: {item.sku}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`font-extrabold text-lg ${item.stock === 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {item.stock} left
+                  </p>
+                  <p className="text-xs text-slate-500">Threshold: {item.threshold}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden mb-8">
         <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
@@ -157,6 +214,7 @@ export default async function DashboardPage() {
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400">Status</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400">Requested By</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400">Date</th>
+                  <th className="px-6 py-4"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -187,6 +245,11 @@ export default async function DashboardPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.by}</td>
                     <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-500">{req.date}</td>
+                    <td className="px-6 py-4 text-right">
+                      <Link href={`/dashboard/requests/${req.rawId}`} className="text-blue-600 hover:underline font-bold text-sm">
+                        View
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

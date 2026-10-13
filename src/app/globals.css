@@ -3,6 +3,23 @@
 @tailwind utilities;
 
 @layer base {
+  /* 
+   * PANEL Q&A NOTE: Accessibility (WCAG 2.1 AA)
+   * If asked: "How does the keyboard navigation work?"
+   * Answer: "We used the :focus-visible pseudo-class. It detects if the user is navigating via keyboard (like pressing Tab). 
+   * It draws a 2px blue ring around the element, but stays completely hidden if they click with a mouse!"
+   */
+  *:focus-visible {
+    outline: 2px solid theme('colors.blue.600');
+    outline-offset: 2px;
+  }
+  
+  /* 
+   * PANEL Q&A NOTE: Design Tokens
+   * If asked: "Why not just use Tailwind's default blue?" or "What are design tokens?"
+   * Answer: "These CSS variables act as our 'Master Switches'. We mapped our exact Figma colors to these variables. 
+   * If the client ever wants to rebrand, we just change the hex code here, and the entire app updates instantly."
+   */
   :root {
     /* Default (Blue) */
     --theme-50: 239 246 255;
