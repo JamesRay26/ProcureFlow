@@ -5,7 +5,28 @@ import { Search } from 'lucide-react';
 import { approveRequest, rejectRequest } from '@/app/actions';
 import { useRouter } from 'next/navigation';
 
-export default function ApprovalsClient({ requests }: { requests: any[] }) {
+type ApprovalRequest = {
+  id: string;
+  shortId: string;
+  title: string;
+  requester: string;
+  time: string;
+  priority: string;
+  status: string;
+  price: string;
+  desc: string;
+  date: string;
+  category: string;
+  requesterRole: string;
+  email: string;
+  justification: string;
+  initials: string;
+  bufferAlloc: string;
+  bufferPct: string;
+  qty: number;
+};
+
+export default function ApprovalsClient({ requests }: { requests: ApprovalRequest[] }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState(requests[0]?.id || null);
   const [activeTab, setActiveTab] = useState('Pending');
@@ -40,7 +61,7 @@ export default function ApprovalsClient({ requests }: { requests: any[] }) {
   if (!requests.length) {
     return (
       <div className="flex flex-col gap-6 h-[calc(100vh-9rem)] items-center justify-center text-slate-500 font-bold bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-        <p>No pending approvals. You're all caught up!</p>
+        <p>No pending approvals. You&apos;re all caught up!</p>
       </div>
     );
   }
@@ -174,7 +195,7 @@ export default function ApprovalsClient({ requests }: { requests: any[] }) {
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
               <h3 className="text-sm font-extrabold text-slate-900 dark:text-white mb-4">Justification</h3>
               <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700/50">
-                <p className="text-sm text-slate-700 dark:text-slate-300 italic">"{selectedReq.justification}"</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300 italic">&quot;{selectedReq.justification}&quot;</p>
               </div>
             </div>
 

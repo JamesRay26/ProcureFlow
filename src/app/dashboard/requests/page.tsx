@@ -1,6 +1,6 @@
 import { can } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
-import { Plus, Filter, Search, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Plus, Filter, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCurrentUser } from '@/lib/session';
 import { redirect } from 'next/navigation';
 

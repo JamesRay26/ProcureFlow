@@ -7,7 +7,7 @@ import { LayoutDashboard, Package, FileText, CheckCircle, ScrollText, Users, Set
 export default function SidebarNav({ isAdmin, isManager, canAudit, pendingApprovalsCount = 0 }: { isAdmin: boolean, isManager: boolean, canAudit: boolean, pendingApprovalsCount?: number }) {
   const pathname = usePathname();
 
-  const navItems = [
+  const navItems: { name: string; href: string; icon: typeof LayoutDashboard; exact?: boolean; badge?: number }[] = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true },
     { name: 'Inventory', href: '/dashboard/inventory', icon: Package },
     { name: 'Requests', href: '/dashboard/requests', icon: FileText },
@@ -19,7 +19,7 @@ export default function SidebarNav({ isAdmin, isManager, canAudit, pendingApprov
       href: '/dashboard/approvals', 
       icon: CheckCircle, 
       badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined 
-    } as any);
+    });
   }
 
   if (canAudit) navItems.push({ name: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText });
@@ -34,7 +34,7 @@ export default function SidebarNav({ isAdmin, isManager, canAudit, pendingApprov
   return (
     <>
       <nav className="flex-1 flex flex-col gap-2">
-        {navItems.map((item: any) => {
+        {navItems.map((item) => {
           const active = isActive(item.href, item.exact);
           return (
             <Link 

@@ -1,9 +1,9 @@
 import { can } from '@/lib/rbac';
-import { Package, CheckCircle2, AlertTriangle, Search, ChevronDown, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react';
+import { Package, CheckCircle2, AlertTriangle, Search, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
+
 import InventoryExportButton from '@/components/InventoryExportButton';
 
 export default async function InventoryPage() {

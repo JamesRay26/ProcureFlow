@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       });
     } else {
       // Otherwise, fallback to the Ethereal testing sandbox
-      let testAccount = await nodemailer.createTestAccount();
+      const testAccount = await nodemailer.createTestAccount();
       transporter = nodemailer.createTransport({
         host: "smtp.ethereal.email",
         port: 587,
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
     const senderEmail = process.env.SMTP_EMAIL || '"ProcureFlow Notifications" <noreply@procureflow.com>';
 
-    let info = await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: senderEmail,
       to: email,
       subject: `You have been invited to join ${admin.organization?.name} on ProcureFlow!`,

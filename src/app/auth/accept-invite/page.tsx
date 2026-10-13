@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { ShieldCheck, Lock, Building2 } from 'lucide-react';
+import { ShieldCheck, Lock } from 'lucide-react';
 
 export default async function AcceptInvitePage({ searchParams }: { searchParams: { token: string } }) {
   const token = searchParams.token;
@@ -30,7 +30,7 @@ export default async function AcceptInvitePage({ searchParams }: { searchParams:
           </div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Join Workspace</h1>
           <p className="text-slate-500 font-medium mt-2">
-            You've been invited to join <strong className="text-blue-600">{invitation.organization.name}</strong> as a <strong className="text-slate-900">{invitation.role}</strong>.
+            You&apos;ve been invited to join <strong className="text-blue-600">{invitation.organization.name}</strong> as a <strong className="text-slate-900">{invitation.role}</strong>.
           </p>
         </div>
 

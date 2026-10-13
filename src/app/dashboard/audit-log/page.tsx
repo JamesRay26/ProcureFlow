@@ -1,5 +1,5 @@
 import { can } from '@/lib/rbac';
-import { Download, Search, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Download, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { redirect } from 'next/navigation';
