@@ -1,3 +1,4 @@
+import { can } from '@/lib/rbac';
 import { Download, Search, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
@@ -6,6 +7,7 @@ import { redirect } from 'next/navigation';
 export default async function AuditLogPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/');
+  if (!can(user.role, 'audit:read')) redirect('/dashboard');
   if (!user.organizationId) redirect('/dashboard');
 
   const dbLogs = await prisma.auditLog.findMany({

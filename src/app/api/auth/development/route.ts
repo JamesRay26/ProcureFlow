@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     });
     const response = NextResponse.redirect(new URL('/dashboard', url), 303);
     const options = { httpOnly: true, sameSite: 'lax' as const, path: '/' };
+    response.cookies.delete('development_role');
     response.cookies.set('session_user', user.id, options);
     response.cookies.set('session_org', user.organizationId!, options);
     return response;

@@ -1,3 +1,4 @@
+import { can } from '@/lib/rbac';
 import { Package, FileText, CheckCircle2, AlertTriangle, Plus, Search, Filter } from 'lucide-react';
 import Link from 'next/link';
 import { getServerSession } from "next-auth/next";
@@ -70,9 +71,9 @@ export default async function DashboardPage() {
           <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Restocking Requests</h2>
           <p className="text-slate-500 font-medium mt-1 dark:text-slate-400">Manage and track your procurement pipeline</p>
         </div>
-        <Link href="/dashboard/requests/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
+        {can(user.role, 'request:create') && (<Link href="/dashboard/requests/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
           <Plus className="w-5 h-5" /> New Request
-        </Link>
+        </Link>)}
       </div>
 
       {/* Stat Cards Row */}

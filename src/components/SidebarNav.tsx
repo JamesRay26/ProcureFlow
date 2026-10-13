@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Package, FileText, CheckCircle, ScrollText, Users, Settings } from 'lucide-react';
 
-export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount = 0 }: { isAdmin: boolean, isManager: boolean, pendingApprovalsCount?: number }) {
+export default function SidebarNav({ isAdmin, isManager, canAudit, pendingApprovalsCount = 0 }: { isAdmin: boolean, isManager: boolean, canAudit: boolean, pendingApprovalsCount?: number }) {
   const pathname = usePathname();
 
   const navItems = [
@@ -22,7 +22,7 @@ export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount =
     } as any);
   }
 
-  navItems.push({ name: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText });
+  if (canAudit) navItems.push({ name: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText });
 
   const isActive = (href: string, exact: boolean = false) => {
     if (exact) {

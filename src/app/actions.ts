@@ -1,12 +1,15 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { can } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { getCurrentUser, getIpAddress } from '@/lib/session';
 
 export async function createInventoryItem(data: FormData) {
   const user = await getCurrentUser();
   if (!user || !user.organizationId) throw new Error('Unauthorized');
+
+  if (!can(user.role, 'inventory:create')) throw new Error('Forbidden');
 
   const name = data.get('name') as string;
   const sku = data.get('sku') as string;
@@ -39,6 +42,8 @@ export async function createInventoryItem(data: FormData) {
 export async function createRequest(data: FormData) {
   const user = await getCurrentUser();
   if (!user || !user.organizationId) throw new Error('Unauthorized');
+
+  if (!can(user.role, 'request:create')) throw new Error('Forbidden');
 
   const itemId = data.get('itemId') as string;
   const quantity = parseInt(data.get('quantity') as string) || 0;
@@ -78,7 +83,7 @@ export async function approveRequest(requestId: string, notes?: string) {
   const user = await getCurrentUser();
   if (!user || !user.organizationId) throw new Error('Unauthorized');
   
-  if (user.role !== 'SYSTEM_ADMIN' && user.role !== 'ADMIN' && user.role !== 'PROCUREMENT_MANAGER') {
+  if (!can(user.role, 'request:approve')) {
     throw new Error('Forbidden: Only Admins and Managers can approve requests');
   }
 
@@ -119,7 +124,7 @@ export async function rejectRequest(requestId: string, notes?: string) {
   const user = await getCurrentUser();
   if (!user || !user.organizationId) throw new Error('Unauthorized');
   
-  if (user.role !== 'SYSTEM_ADMIN' && user.role !== 'ADMIN' && user.role !== 'PROCUREMENT_MANAGER') {
+  if (!can(user.role, 'request:approve')) {
     throw new Error('Forbidden: Only Admins and Managers can reject requests');
   }
 

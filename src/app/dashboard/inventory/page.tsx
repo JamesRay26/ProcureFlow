@@ -1,3 +1,4 @@
+import { can } from '@/lib/rbac';
 import { Package, CheckCircle2, AlertTriangle, Search, ChevronDown, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
@@ -48,9 +49,9 @@ export default async function InventoryPage() {
         </div>
         <div className="flex items-center gap-3">
           <InventoryExportButton items={items} />
-          <a href="/dashboard/inventory/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors">
+          {can(user.role, 'inventory:create') && (<a href="/dashboard/inventory/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors">
             <Plus className="w-5 h-5" /> Add Item
-          </a>
+          </a>)}
         </div>
       </div>
 

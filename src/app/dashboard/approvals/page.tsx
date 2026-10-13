@@ -1,3 +1,4 @@
+import { can } from '@/lib/rbac';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { redirect } from 'next/navigation';
@@ -6,6 +7,7 @@ import ApprovalsClient from './ApprovalsClient';
 export default async function ApprovalsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/');
+  if (!can(user.role, 'request:approve')) redirect('/dashboard');
   if (!user.organizationId) redirect('/dashboard');
 
   const pendingRequests = await prisma.request.findMany({

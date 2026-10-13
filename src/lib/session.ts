@@ -2,6 +2,7 @@ import { cookies, headers } from 'next/headers';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import prisma from '@/lib/prisma';
+import { isLocalDeveloper, roles } from '@/lib/rbac';
 
 export async function getCurrentUser() {
   const session = await getServerSession(authOptions);
@@ -13,6 +14,10 @@ export async function getCurrentUser() {
       where: { email: session.user.email },
       include: { organization: true }
     });
+    const previewRole = cookieStore.get('development_role')?.value;
+    if (isLocalDeveloper(user, headers().get('host')) && roles.some(role => role.value === previewRole)) {
+      return { ...user!, role: previewRole! };
+    }
     return user;
   }
 
@@ -21,6 +26,10 @@ export async function getCurrentUser() {
       where: { id: manualUserId },
       include: { organization: true }
     });
+    const previewRole = cookieStore.get('development_role')?.value;
+    if (isLocalDeveloper(user, headers().get('host')) && roles.some(role => role.value === previewRole)) {
+      return { ...user!, role: previewRole! };
+    }
     return user;
   }
 
