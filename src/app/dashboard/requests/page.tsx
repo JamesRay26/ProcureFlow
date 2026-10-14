@@ -15,7 +15,7 @@ export default async function RequestsPage() {
   });
 
   const requests = dbRequests.map(req => ({
-    id: req.id.slice(0, 8).toUpperCase(),
+    rawId: req.id, id: req.id.slice(0, 8).toUpperCase(),
     name: req.item.name,
     qty: req.quantity,
     warehouse: req.item.warehouse,
@@ -64,7 +64,7 @@ export default async function RequestsPage() {
                 <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Priority</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Status</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Requested By</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Date</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Date</th><th className="px-6 py-4"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
@@ -94,7 +94,7 @@ export default async function RequestsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.by}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-500">{req.date}</td>
+                  <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-500">{req.date}</td><td className="px-6 py-4 text-right"><a href={`/dashboard/requests/${req.rawId}`} className="text-blue-600 hover:underline font-bold text-sm">View</a></td>
                 </tr>
               ))}
             </tbody>

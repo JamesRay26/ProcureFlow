@@ -8,16 +8,15 @@ export default async function ApprovalsPage() {
   if (!user) redirect('/');
   if (!user.organizationId) redirect('/dashboard');
 
-  const pendingRequests = await prisma.request.findMany({
+  const allRequests = await prisma.request.findMany({
     where: { 
-      organizationId: user.organizationId,
-      status: 'PENDING'
+      organizationId: user.organizationId
     },
     include: { item: true, requestedBy: true },
     orderBy: { createdAt: 'desc' }
   });
 
-  const formattedRequests = pendingRequests.map(req => {
+  const formattedRequests = allRequests.map(req => {
     const timeDiff = Math.floor((new Date().getTime() - new Date(req.createdAt).getTime()) / (1000 * 3600));
     return {
       id: req.id,
@@ -26,8 +25,8 @@ export default async function ApprovalsPage() {
       requester: req.requestedBy.name,
       time: timeDiff < 1 ? 'Just now' : `${timeDiff} hours ago`,
       priority: req.priority,
-      status: req.status,
-      price: `$${(req.item.maxStock * 10).toLocaleString()}`, // Mocking cost logic for now
+      status: req.status, // PENDING, APPROVED, REJECTED
+      price: `$${(req.item.maxStock * 10).toLocaleString()}`,
       desc: req.item.category,
       qty: req.quantity,
       date: new Date(req.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),

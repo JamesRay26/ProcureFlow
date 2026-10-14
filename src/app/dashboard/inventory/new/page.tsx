@@ -20,8 +20,8 @@ export default function NewInventoryItemPage() {
       const formData = new FormData(e.currentTarget);
       await createInventoryItem(formData);
       router.push('/dashboard/inventory');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create item');
+    } catch (err: unknown) {
+      setError((err as Error).message || 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -91,10 +91,9 @@ export default function NewInventoryItemPage() {
           <div>
             <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">Warehouse Location</label>
             <select name="warehouse" className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500">
+              <option value="Digos City Central HQ">Digos City Central HQ</option>
               <option value="Main DC">Main DC</option>
-              <option value="East Coast">East Coast</option>
-              <option value="West Coast">West Coast</option>
-              <option value="Manila HQ">Manila HQ</option>
+              <option value="Davao Regional Hub">Davao Regional Hub</option>
               <option value="Cebu Branch">Cebu Branch</option>
             </select>
           </div>
