@@ -6,6 +6,15 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createRequest } from '@/app/actions';
 
+interface RequestItemOption {
+  id: string;
+  name: string;
+  sku: string;
+  stock?: number;
+  threshold?: number;
+  warehouse?: string;
+}
+
 export default function NewRequestPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -16,8 +25,8 @@ export default function NewRequestPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
-  const [items, setItems] = useState<Array<{ id: string; name: string; sku: string; [key: string]: unknown }>>([]);
-  const [selectedItem, setSelectedItem] = useState<{ id: string; name: string; sku: string; [key: string]: unknown } | null>(null);
+  const [items, setItems] = useState<RequestItemOption[]>([]);
+  const [selectedItem, setSelectedItem] = useState<RequestItemOption | null>(null);
 
   useEffect(() => {
     // Basic inline fetch for available items

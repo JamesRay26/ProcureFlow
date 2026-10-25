@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
 import { redirect } from 'next/navigation';
-import { ChevronLeft, Truck, Package, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { ChevronLeft, Truck, Package, CheckCircle2, AlertTriangle, Shield, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import EditRequestForm from './EditRequestForm';
@@ -37,8 +37,14 @@ export default async function RequestDetailsPage({ params }: { params: { id: str
     );
   }
 
-  // Determine if it can be edited
-  const canEdit = req.status === 'PENDING';
+  // Determine if it can be edited:
+  // User Story / Requirements: "when the request is not yet approved the requestor should be able to edit the order, but once accepted it will automatically cannot be altered."
+  // TC-RW-05: When returned for correction, requester can correct and resubmit
+  // TC-RBAC-02: Auditor has read-only access (cannot edit)
+  const isAuditor = user.role === 'AUDITOR';
+  const isReturned = req.status === 'RETURNED';
+  const isPending = req.status === 'PENDING';
+  const canEdit = (isPending || isReturned) && !isAuditor;
   const isApproved = req.status === 'APPROVED';
 
   return (
@@ -69,11 +75,37 @@ export default async function RequestDetailsPage({ params }: { params: { id: str
         <span className={`inline-flex px-4 py-2 rounded-xl text-sm font-extrabold shadow-sm border ${
           req.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800' :
           req.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800' :
+          req.status === 'RETURNED' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800' :
           'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800'
         }`}>
-          Status: {req.status}
+          Status: {req.status === 'RETURNED' ? 'RETURNED FOR CORRECTION' : req.status}
         </span>
       </div>
+
+      {/* Manager Feedback Notice (If Returned or Rejected) */}
+      {req.reviewNotes && (
+        <div className={`mb-8 p-5 rounded-2xl border ${
+          isReturned 
+            ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-300'
+            : 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 text-red-900 dark:text-red-300'
+        }`}>
+          <div className="flex items-center gap-2 mb-1.5 font-extrabold text-sm">
+            {isReturned ? <RotateCcw className="w-5 h-5 text-amber-600" /> : <AlertTriangle className="w-5 h-5 text-red-600" />}
+            <span>{isReturned ? 'Manager Revision Instructions (TC-RW-05):' : 'Rejection Reason (TC-RW-04):'}</span>
+          </div>
+          <p className="text-sm font-medium pl-7">
+            &ldquo;{req.reviewNotes}&rdquo;
+          </p>
+        </div>
+      )}
+
+      {/* Auditor Read-Only Notice */}
+      {isAuditor && (
+        <div className="mb-8 p-4 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-2xl flex items-center gap-3 text-purple-800 dark:text-purple-300 text-xs font-bold shadow-sm">
+          <Shield className="w-5 h-5 shrink-0" />
+          <span>TC-RBAC-02 Compliance: Auditor logged in with read-only privileges. Creation and editing controls are disabled.</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Item Specifications & Edit / Locked Form (5 cols on desktop) */}
@@ -111,13 +143,17 @@ export default async function RequestDetailsPage({ params }: { params: { id: str
               </div>
             </div>
 
-            {/* Editable Form (when PENDING) OR Locked Read-Only State (when APPROVED / REJECTED) */}
+            {/* Editable Form (when PENDING or RETURNED) OR Locked Read-Only State (when APPROVED / REJECTED) */}
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800">
               {canEdit ? (
                 <>
                   <div className="mb-4">
-                    <span className="inline-block px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 dark:bg-blue-900/40 dark:text-blue-300 rounded-lg">
-                      ✏️ Order Pending: Editable by Requester
+                    <span className={`inline-block px-2.5 py-1 text-xs font-bold rounded-lg ${
+                      isReturned
+                        ? 'text-amber-800 bg-amber-50 dark:bg-amber-900/40 dark:text-amber-300'
+                        : 'text-blue-700 bg-blue-50 dark:bg-blue-900/40 dark:text-blue-300'
+                    }`}>
+                      {isReturned ? '⚠️ Returned: Requester can correct and resubmit (TC-RW-05)' : '✏️ Order Pending: Editable by Requester'}
                     </span>
                   </div>
                   <EditRequestForm 
@@ -125,13 +161,16 @@ export default async function RequestDetailsPage({ params }: { params: { id: str
                     initialQty={req.quantity} 
                     initialPriority={req.priority} 
                     initialJustification={req.justification || ''} 
+                    isReturned={isReturned}
                   />
                 </>
               ) : (
                 <div className="space-y-4">
                   <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
                     <div>
-                      <p className="text-xs text-slate-500 font-bold">Approved Quantity</p>
+                      <p className="text-xs text-slate-500 font-bold">
+                        {isApproved ? 'Approved Quantity' : 'Requested Quantity'}
+                      </p>
                       <p className="text-xl font-extrabold text-slate-900 dark:text-white">{req.quantity} units</p>
                     </div>
                     <div>
@@ -157,7 +196,11 @@ export default async function RequestDetailsPage({ params }: { params: { id: str
                   <div className="p-4 bg-blue-50 dark:bg-blue-950/30 text-blue-800 dark:text-blue-300 rounded-xl text-xs font-bold border border-blue-200 dark:border-blue-900 flex items-center gap-2.5 shadow-sm">
                     <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0" />
                     <span>
-                      Order is locked. Once accepted by management, order specifications cannot be altered to preserve audit compliance.
+                      {isApproved 
+                        ? 'Order is locked. Once accepted by management, order specifications cannot be altered to preserve audit compliance.'
+                        : req.status === 'REJECTED'
+                        ? 'Order is finalized and rejected. Locked against modifications.'
+                        : 'Read-only access. You do not have permission to edit this request.'}
                     </span>
                   </div>
                 </div>
@@ -184,10 +227,14 @@ export default async function RequestDetailsPage({ params }: { params: { id: str
               <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-4">
                 <Truck className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Tracking En Route Pending</h3>
+              <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                {isReturned ? 'Logistics Route Paused (Returned for Revision)' : 'Tracking En Route Pending'}
+              </h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-2">
                 This restocking request is currently <strong className="text-slate-800 dark:text-slate-200">{req.status}</strong>. 
-                Once approved by the procurement manager, the automated logistics carrier will dispatch and generate live route tracking with checkpoints, vehicle coordinates, and ETA anticipation.
+                {isReturned 
+                  ? ' The requester must correct the request and resubmit it before the procurement manager can approve dispatch.' 
+                  : ' Once approved by the procurement manager, the automated logistics carrier will dispatch and generate live route tracking with checkpoints, vehicle coordinates, and ETA anticipation.'}
               </p>
             </div>
           )}

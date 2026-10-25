@@ -12,7 +12,8 @@ import {
   ChevronRight, 
   Plus, 
   Download,
-  Check
+  Check,
+  Shield
 } from 'lucide-react';
 
 export interface InventoryItemData {
@@ -30,9 +31,10 @@ export interface InventoryItemData {
 
 interface InventoryClientProps {
   initialItems: InventoryItemData[];
+  userRole?: string;
 }
 
-export default function InventoryClient({ initialItems }: InventoryClientProps) {
+export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_STAFF' }: InventoryClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'In Stock' | 'Low Stock' | 'Out of Stock'>('All');
   const [selectedWarehouse, setSelectedWarehouse] = useState('All Warehouses');
@@ -150,12 +152,18 @@ export default function InventoryClient({ initialItems }: InventoryClientProps) 
             <Download className="w-4 h-4 text-blue-600" />
             Export CSV
           </button>
-          <Link 
-            href="/dashboard/inventory/new" 
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
-          >
-            <Plus className="w-5 h-5" /> Add Item
-          </Link>
+          {userRole === 'AUDITOR' ? (
+            <span className="flex items-center gap-1.5 px-4 py-2.5 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-xl text-xs font-bold shadow-sm">
+              <Shield className="w-4 h-4" /> Auditor Read-Only (TC-RBAC-02)
+            </span>
+          ) : (
+            <Link 
+              href="/dashboard/inventory/new" 
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
+            >
+              <Plus className="w-5 h-5" /> Add Item
+            </Link>
+          )}
         </div>
       </div>
 

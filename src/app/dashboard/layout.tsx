@@ -105,7 +105,7 @@ export default async function DashboardLayout({
           </div>
         </div>
 
-        <SidebarNav isAdmin={isAdmin} isManager={isManager} pendingApprovalsCount={pendingApprovalsCount} />
+        <SidebarNav role={user.role} isAdmin={isAdmin} isManager={isManager} pendingApprovalsCount={pendingApprovalsCount} />
 
         <div className="pt-6 border-t border-slate-100 dark:border-slate-800 mt-auto">
           <form action="/api/auth/logout" method="POST">

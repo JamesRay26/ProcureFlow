@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { Plus, Filter, Search, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Plus, Filter, Search, ChevronLeft, ChevronRight, FileText, Shield } from 'lucide-react';
 import { getCurrentUser } from '@/lib/session';
 import { redirect } from 'next/navigation';
 
@@ -15,15 +15,24 @@ export default async function RequestsPage() {
   });
 
   const requests = dbRequests.map(req => ({
-    rawId: req.id, id: req.id.slice(0, 8).toUpperCase(),
+    rawId: req.id, 
+    id: req.id.slice(0, 8).toUpperCase(),
     name: req.item.name,
     qty: req.quantity,
     warehouse: req.item.warehouse,
     priority: req.priority,
-    status: req.status === 'PENDING' ? (req.justification ? 'Pending' : 'Draft') : req.status === 'APPROVED' ? 'Approved' : 'Rejected',
+    status: req.status === 'PENDING' 
+      ? (req.justification ? 'Pending' : 'Draft') 
+      : req.status === 'APPROVED' 
+      ? 'Approved' 
+      : req.status === 'RETURNED'
+      ? 'Returned'
+      : 'Rejected',
     by: req.requestedBy.name,
     date: new Date(req.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }));
+
+  const isAuditor = user.role === 'AUDITOR';
 
   return (
     <>
@@ -36,9 +45,15 @@ export default async function RequestsPage() {
           <button className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-bold transition-colors">
             <Filter className="w-5 h-5" /> Filter
           </button>
-          <a href="/dashboard/requests/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors">
-            <Plus className="w-5 h-5" /> New Request
-          </a>
+          {isAuditor ? (
+            <span className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-xl text-xs font-bold">
+              <Shield className="w-4 h-4" /> Auditor Read-Only (TC-RBAC-02)
+            </span>
+          ) : (
+            <a href="/dashboard/requests/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors">
+              <Plus className="w-5 h-5" /> New Request
+            </a>
+          )}
         </div>
       </div>
 
@@ -64,13 +79,14 @@ export default async function RequestsPage() {
                 <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Priority</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Status</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Requested By</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Date</th><th className="px-6 py-4"></th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">Date</th>
+                <th className="px-6 py-4"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700/50">
               {requests.map((req, i) => (
                 <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                  <td className="px-6 py-4 text-sm font-bold text-blue-600 dark:text-blue-400">{req.id}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-blue-600 dark:text-blue-400">#{req.id}</td>
                   <td className="px-6 py-4 text-sm font-bold text-slate-900 dark:text-slate-100">{req.name}</td>
                   <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.qty}</td>
                   <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.warehouse}</td>
@@ -86,6 +102,7 @@ export default async function RequestsPage() {
                   <td className="px-6 py-4">
                     <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-bold ${
                       req.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                      req.status === 'Returned' ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
                       req.status === 'Rejected' ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
                       req.status === 'Draft' ? 'bg-slate-100 text-slate-600 dark:bg-slate-500/10 dark:text-slate-400' :
                       'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'
@@ -94,7 +111,12 @@ export default async function RequestsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.by}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-500">{req.date}</td><td className="px-6 py-4 text-right"><a href={`/dashboard/requests/${req.rawId}`} className="text-blue-600 hover:underline font-bold text-sm">View</a></td>
+                  <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-500">{req.date}</td>
+                  <td className="px-6 py-4 text-right">
+                    <a href={`/dashboard/requests/${req.rawId}`} className="text-blue-600 dark:text-blue-400 hover:underline font-bold text-sm">
+                      View
+                    </a>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -103,13 +125,13 @@ export default async function RequestsPage() {
         <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
           <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Showing {requests.length} results</p>
           <div className="flex gap-1">
-            <a href="?page=1" className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+            <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
               <ChevronLeft className="w-4 h-4" />
-            </a>
-            <a href="?page=1" className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-600 text-white font-bold transition-colors">1</a>
-            <a href="?page=1" className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+            </button>
+            <span className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-600 text-white font-bold transition-colors">1</span>
+            <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
               <ChevronRight className="w-4 h-4" />
-            </a>
+            </button>
           </div>
         </div>
       </div>

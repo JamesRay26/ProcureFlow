@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { switchUserRole } from '@/app/actions';
 import { 
   Bell, 
   ChevronDown, 
@@ -15,7 +17,9 @@ import {
   Package, 
   LogOut, 
   Check, 
-  Trash2 
+  Trash2,
+  Shield,
+  UserCheck
 } from 'lucide-react';
 
 export interface NotificationItem {
@@ -38,13 +42,29 @@ interface TopHeaderNavProps {
 }
 
 export default function TopHeaderNav({ user, notifications: initialNotifications = [] }: TopHeaderNavProps) {
+  const router = useRouter();
   const [isBellOpen, setIsBellOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications);
   const [unreadCount, setUnreadCount] = useState<number>(initialNotifications.length);
 
   const bellRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  const handleSwitchRole = async (targetEmail: string) => {
+    try {
+      setSwitching(true);
+      await switchUserRole(targetEmail);
+      setIsProfileOpen(false);
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to switch test account.');
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -258,6 +278,68 @@ export default function TopHeaderNav({ user, notifications: initialNotifications
                   <FileText className="w-4 h-4 text-slate-400" />
                   Procurement Requests
                 </Link>
+              </div>
+
+              {/* RBAC Evaluation: Quick Test Account Switcher */}
+              <div className="py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="px-4 mb-1.5 flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Switch Test Account
+                  </span>
+                  {switching && (
+                    <span className="text-[10px] text-blue-600 font-bold animate-pulse">Switching...</span>
+                  )}
+                </div>
+                <div className="space-y-0.5 px-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole('admin@procureflow.com')}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                      user.role === 'ADMIN' || user.role === 'SYSTEM_ADMIN'
+                        ? 'text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40' 
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>👑 System Admin</span>
+                    {(user.role === 'ADMIN' || user.role === 'SYSTEM_ADMIN') && <Check className="w-3.5 h-3.5 text-indigo-600" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole('manager@procureflow.com')}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                      user.role === 'PROCUREMENT_MANAGER' 
+                        ? 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40' 
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>💼 Procurement Manager</span>
+                    {user.role === 'PROCUREMENT_MANAGER' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole('staff@procureflow.com')}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                      user.role === 'WAREHOUSE_STAFF' 
+                        ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' 
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>📦 Warehouse Staff</span>
+                    {user.role === 'WAREHOUSE_STAFF' && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchRole('auditor@procureflow.com')}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${
+                      user.role === 'AUDITOR' 
+                        ? 'text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40' 
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>🛡️ Auditor (Read-Only)</span>
+                    {user.role === 'AUDITOR' && <Check className="w-3.5 h-3.5 text-purple-600" />}
+                  </button>
+                </div>
               </div>
 
               {/* Logout Form */}

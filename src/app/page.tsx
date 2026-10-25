@@ -8,6 +8,8 @@ import { signIn } from "next-auth/react";
 function AuthContent() {
   const [view, setView] = useState<"login" | "register">("login");
   const [regType, setRegType] = useState<"employee" | "admin">("employee");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
@@ -67,7 +69,15 @@ function AuthContent() {
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Email Address</label>
                 <div className="relative group">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                <input type="email" name="email" required placeholder="name@company.com" className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm" />
+                <input 
+                  type="email" 
+                  name="email" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required 
+                  placeholder="name@company.com" 
+                  className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm" 
+                />
               </div>
               </div>
               <div>
@@ -77,13 +87,88 @@ function AuthContent() {
                 </div>
                 <div className="relative group">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                  <input type="password" name="password" required placeholder="••••••••" className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm" />
+                  <input 
+                    type="password" 
+                    name="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required 
+                    placeholder="••••••••" 
+                    className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-sm" 
+                  />
                 </div>
               </div>
             </div>
             <button type="submit" className="w-full mt-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/40 hover:-translate-y-0.5 transition-all outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               Secure Sign In
             </button>
+
+            {/* Quick 1-Click Fill Test Accounts for RBAC Demonstration */}
+            <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Test Accounts (1-Click Fill)
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">pwd: password123</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('admin@procureflow.com');
+                    setPassword('password123');
+                  }}
+                  className="p-2 bg-indigo-50/70 hover:bg-indigo-100/80 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 text-left transition-all"
+                >
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <span>👑 Admin</span>
+                  </div>
+                  <p className="text-[10px] text-indigo-500 font-mono truncate">admin@procureflow.com</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('manager@procureflow.com');
+                    setPassword('password123');
+                  }}
+                  className="p-2 bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 text-xs font-bold rounded-xl border border-blue-100 text-left transition-all"
+                >
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <span>💼 Manager</span>
+                  </div>
+                  <p className="text-[10px] text-blue-500 font-mono truncate">manager@procureflow.com</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('staff@procureflow.com');
+                    setPassword('password123');
+                  }}
+                  className="p-2 bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-100 text-left transition-all"
+                >
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <span>📦 Staff</span>
+                  </div>
+                  <p className="text-[10px] text-emerald-500 font-mono truncate">staff@procureflow.com</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('auditor@procureflow.com');
+                    setPassword('password123');
+                  }}
+                  className="p-2 bg-purple-50/70 hover:bg-purple-100/80 text-purple-700 text-xs font-bold rounded-xl border border-purple-100 text-left transition-all"
+                >
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <span>🛡️ Auditor</span>
+                  </div>
+                  <p className="text-[10px] text-purple-500 font-mono truncate">auditor@procureflow.com</p>
+                </button>
+              </div>
+            </div>
           </form>
         ) : (
           <form action="/api/auth/register" method="POST" className="space-y-5 animate-fade-in-up">

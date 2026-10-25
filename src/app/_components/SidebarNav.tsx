@@ -1,24 +1,34 @@
 /* 
- * PANEL Q&A NOTE: 'use client' Directive
- * If asked: "Why does this file say 'use client'?"
- * Answer: "Because this component uses interactivity (like 'usePathname' to highlight the active menu item). 
- * Next.js Server Components can't track URL state in the browser, so we mark this specific component to run on the client!"
+ * CS 490 SENIOR CAPSTONE - ROLE-BASED SIDEBAR NAVIGATION
+ * Dynamic RBAC navigation reflecting assigned role permissions:
+ * - WAREHOUSE_STAFF: Restricted from Approval Queue (TC-RBAC-01 / TC-RBAC-04)
+ * - AUDITOR: Read-Only overview across all modules (TC-RBAC-02)
+ * - ADMIN: Administrative tools & organization management (TC-RBAC-03)
+ * - PROCUREMENT_MANAGER: Restocking approvals & logistics queue (TC-RW-03)
  */
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Package, FileText, CheckCircle, ScrollText, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, Package, FileText, CheckCircle, ScrollText, Users, Settings, Shield, UserCheck } from 'lucide-react';
 
-/* 
- * PANEL Q&A NOTE: Strict TypeScript (Zero 'any' Types)
- * If asked: "How did you ensure type safety?"
- * Answer: "Instead of using the lazy 'any' keyword, we strictly defined our props and arrays. 
- * For example, right below here, we dictate exactly what properties a 'navItem' object is allowed to have (name, href, icon). 
- * If we try to pass bad data, the code simply won't compile, making it virtually crash-proof."
- */
-export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount = 0 }: { isAdmin: boolean, isManager: boolean, pendingApprovalsCount?: number }) {
+export default function SidebarNav({ 
+  role = 'WAREHOUSE_STAFF', 
+  pendingApprovalsCount = 0,
+  isAdmin: legacyIsAdmin,
+  isManager: legacyIsManager,
+}: { 
+  role?: string;
+  pendingApprovalsCount?: number;
+  isAdmin?: boolean;
+  isManager?: boolean;
+}) {
   const pathname = usePathname();
+
+  const isAdmin = role === 'ADMIN' || role === 'SYSTEM_ADMIN' || Boolean(legacyIsAdmin);
+  const isManager = role === 'PROCUREMENT_MANAGER' || Boolean(legacyIsManager);
+  const isAuditor = role === 'AUDITOR';
+  const isStaff = role === 'WAREHOUSE_STAFF';
 
   const navItems: Array<{ name: string; href: string; icon: React.ElementType; exact?: boolean; badge?: number }> = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, exact: true },
@@ -26,12 +36,14 @@ export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount =
     { name: 'Requests', href: '/dashboard/requests', icon: FileText },
   ];
 
-  if (isAdmin || isManager) {
+  // TC-RBAC-04: Warehouse Staff are blocked from the Approval Queue
+  // Managers, Admins, and Auditors (read-only) can access Approvals
+  if (!isStaff) {
     navItems.push({ 
       name: 'Approvals', 
       href: '/dashboard/approvals', 
       icon: CheckCircle, 
-      badge: pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined 
+      badge: isManager && pendingApprovalsCount > 0 ? pendingApprovalsCount : undefined 
     });
   }
 
@@ -46,6 +58,19 @@ export default function SidebarNav({ isAdmin, isManager, pendingApprovalsCount =
 
   return (
     <>
+      {/* Current Active Role Badge */}
+      <div className="mb-6 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+          Active Role
+        </span>
+        <div className="flex items-center gap-1.5 font-bold text-xs">
+          {isAdmin && <span className="text-indigo-600 dark:text-indigo-400">👑 System Admin</span>}
+          {isManager && <span className="text-blue-600 dark:text-blue-400">💼 Procurement Manager</span>}
+          {isStaff && <span className="text-emerald-600 dark:text-emerald-400">📦 Warehouse Staff</span>}
+          {isAuditor && <span className="text-purple-600 dark:text-purple-400">🛡️ Auditor (Read-Only)</span>}
+        </div>
+      </div>
+
       <nav className="flex-1 flex flex-col gap-2">
         {navItems.map((item: { name: string; href: string; icon: React.ElementType; exact?: boolean; badge?: number }) => {
           const active = isActive(item.href, item.exact);

@@ -1,8 +1,5 @@
-import { Package, FileText, CheckCircle2, AlertTriangle, Plus, Search, Filter } from 'lucide-react';
+import { Package, FileText, CheckCircle2, AlertTriangle, Plus, Search, Filter, Shield } from 'lucide-react';
 import Link from 'next/link';
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
@@ -38,25 +35,14 @@ export default async function DashboardPage() {
     where: { organizationId: user.organizationId, status: 'APPROVED', createdAt: { gte: today } }
   });
 
-  const totalInventoryCount = await prisma.inventoryItem.count({
-    where: { organizationId: user.organizationId }
-  });
-
   // Fetch actual items for the Critical/Urgent Tracking list
   const criticalStockItems = await prisma.inventoryItem.findMany({
     where: { 
       organizationId: user.organizationId,
-      stock: { lte: 10 } // Or lte: prisma.inventoryItem.fields.threshold, but SQLite can't do column comparison easily in findMany, so we fetch low stock
+      stock: { lte: 10 }
     },
     orderBy: { stock: 'asc' },
     take: 5
-  });
-
-  const lowStockCount = await prisma.inventoryItem.count({
-    where: { 
-      organizationId: user.organizationId,
-      stock: { lte: 10 }
-    }
   });
 
   const dbRequests = await prisma.request.findMany({
@@ -69,12 +55,8 @@ export default async function DashboardPage() {
   const allItems = await prisma.inventoryItem.findMany({
     where: { organizationId: user.organizationId }
   });
-  // lowStockCount and totalInventoryCount were fetched above directly via DB counts, 
-  // but to properly use the threshold for lowStock we can use the JS filter as originally done:
   const actualLowStockCount = allItems.filter(i => i.stock <= i.threshold).length;
   const actualTotalCount = allItems.length;
-
-  // Let's use actualLowStockCount for the stats card
 
   const requests = dbRequests.map(req => ({
     rawId: req.id,
@@ -83,10 +65,18 @@ export default async function DashboardPage() {
     qty: req.quantity,
     warehouse: req.item.warehouse,
     priority: req.priority,
-    status: req.status === 'PENDING' ? (req.justification ? 'Pending' : 'Draft') : req.status === 'APPROVED' ? 'Approved' : 'Rejected',
+    status: req.status === 'PENDING' 
+      ? (req.justification ? 'Pending' : 'Draft') 
+      : req.status === 'APPROVED' 
+      ? 'Approved' 
+      : req.status === 'RETURNED'
+      ? 'Returned'
+      : 'Rejected',
     by: req.requestedBy.name,
     date: new Date(req.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }));
+
+  const isAuditor = user.role === 'AUDITOR';
 
   return (
     <>
@@ -96,9 +86,15 @@ export default async function DashboardPage() {
           <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Restocking Requests</h2>
           <p className="text-slate-500 font-medium mt-1 dark:text-slate-400">Manage and track your procurement pipeline</p>
         </div>
-        <Link href="/dashboard/requests/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
-          <Plus className="w-5 h-5" /> New Request
-        </Link>
+        {isAuditor ? (
+          <span className="flex items-center gap-2 px-4 py-2.5 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-xl text-xs font-bold shadow-sm">
+            <Shield className="w-4 h-4" /> Auditor Read-Only (TC-RBAC-02)
+          </span>
+        ) : (
+          <Link href="/dashboard/requests/new" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0">
+            <Plus className="w-5 h-5" /> New Request
+          </Link>
+        )}
       </div>
 
       {/* Stat Cards Row */}
@@ -220,7 +216,7 @@ export default async function DashboardPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {requests.map((req, i) => (
                   <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-bold text-blue-600 dark:text-blue-400">{req.id}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-blue-600 dark:text-blue-400">#{req.id}</td>
                     <td className="px-6 py-4 text-sm font-bold text-slate-900 dark:text-slate-100">{req.name}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.qty}</td>
                     <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{req.warehouse}</td>
@@ -236,6 +232,7 @@ export default async function DashboardPage() {
                     <td className="px-6 py-4">
                       <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-bold ${
                         req.status === 'Approved' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                        req.status === 'Returned' ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
                         req.status === 'Rejected' ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' :
                         req.status === 'Draft' ? 'bg-slate-100 text-slate-600 dark:bg-slate-500/10 dark:text-slate-400' :
                         'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'

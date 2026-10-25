@@ -73,7 +73,8 @@ model Request {
   quantity       Int
   priority       String        // Low, Medium, High
   justification  String?
-  status         String        @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewNotes    String?       // Manager feedback for Rejections or Returns (TC-RW-04, TC-RW-05)
+  status         String        @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED
   createdAt      DateTime      @default(now())
   
   // Tracking & Shipping

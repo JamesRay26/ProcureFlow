@@ -64,7 +64,21 @@ async function main() {
     },
   });
 
-  console.log(`✅ Users seeded: Admin (${adminUser.email}), Staff (${staffUser.email}), Manager (${managerUser.email})`);
+  const auditorUser = await prisma.user.upsert({
+    where: { email: 'auditor@procureflow.com' },
+    update: {
+      organizationId: org.id,
+    },
+    create: {
+      name: 'Compliance Auditor',
+      email: 'auditor@procureflow.com',
+      passwordHash,
+      role: 'AUDITOR',
+      organizationId: org.id,
+    },
+  });
+
+  console.log(`✅ Users seeded: Admin (${adminUser.email}), Staff (${staffUser.email}), Manager (${managerUser.email}), Auditor (${auditorUser.email})`);
 
   // 3. Idempotent Inventory Items Seed (Upsert by compound unique [sku, organizationId])
   const itemsData = [
@@ -137,18 +151,90 @@ async function main() {
 
   console.log(`✅ ${itemsData.length} inventory items seeded with Digos City Central HQ localization.`);
 
-  // 4. Idempotent Sample Request Seed
-  const sampleItem = await prisma.inventoryItem.findFirst({
+  // 4. Seed Requests across all 4 workflow states (PENDING, RETURNED, APPROVED, REJECTED)
+  const keyboardItem = await prisma.inventoryItem.findFirst({
+    where: { sku: 'KEY-123', organizationId: org.id },
+  });
+  const printerItem = await prisma.inventoryItem.findFirst({
+    where: { sku: 'PRNT-001', organizationId: org.id },
+  });
+  const chairItem = await prisma.inventoryItem.findFirst({
     where: { sku: 'CHR-991', organizationId: org.id },
   });
+  const mouseItem = await prisma.inventoryItem.findFirst({
+    where: { sku: 'MOU-204', organizationId: org.id },
+  });
 
-  if (sampleItem) {
+  // 4a. PENDING request (TC-RW-01, TC-RW-03, TC-RW-04, TC-RW-05)
+  if (keyboardItem) {
     const existingReq = await prisma.request.findFirst({
-      where: { itemId: sampleItem.id, organizationId: org.id },
+      where: { itemId: keyboardItem.id, status: 'PENDING', organizationId: org.id },
     });
-
     if (!existingReq) {
-      await prisma.request.create({
+      const req = await prisma.request.create({
+        data: {
+          quantity: 20,
+          priority: 'Medium',
+          justification: 'Replenishing engineering lab workstation peripherals before Q4 intake.',
+          status: 'PENDING',
+          itemId: keyboardItem.id,
+          requestedById: staffUser.id,
+          organizationId: org.id,
+        },
+      });
+      await prisma.auditLog.create({
+        data: {
+          actionType: 'CREATION',
+          description: `Initiated restocking request for 20x ${keyboardItem.name}`,
+          requestId: req.id,
+          ipAddress: '127.0.0.1',
+          userId: staffUser.id,
+          organizationId: org.id,
+        },
+      });
+      console.log('✅ Seeded PENDING request (Ready for Manager Approval / Staff Edit).');
+    }
+  }
+
+  // 4b. RETURNED request (TC-RW-05: Return for correction and requester resubmission)
+  if (printerItem) {
+    const existingReq = await prisma.request.findFirst({
+      where: { itemId: printerItem.id, status: 'RETURNED', organizationId: org.id },
+    });
+    if (!existingReq) {
+      const req = await prisma.request.create({
+        data: {
+          quantity: 8,
+          priority: 'High',
+          justification: 'Backup units for finance department invoice printing.',
+          status: 'RETURNED',
+          reviewNotes: 'Storage capacity in Digos City HQ server room currently only accommodates 4 units. Please reduce quantity.',
+          itemId: printerItem.id,
+          requestedById: staffUser.id,
+          organizationId: org.id,
+        },
+      });
+      await prisma.auditLog.create({
+        data: {
+          actionType: 'RETURNED',
+          description: `Request returned for correction by Procurement Manager: Storage capacity limits require quantity adjustment.`,
+          requestId: req.id,
+          ipAddress: '127.0.0.1',
+          userId: managerUser.id,
+          organizationId: org.id,
+        },
+      });
+      console.log('✅ Seeded RETURNED request (Ready for Staff correction and resubmission).');
+    }
+  }
+
+  // 4c. APPROVED request (TC-RW-03: In-transit parcel tracking to Digos City)
+  if (chairItem) {
+    const existingReq = await prisma.request.findFirst({
+      where: { itemId: chairItem.id, status: 'APPROVED', organizationId: org.id },
+    });
+    if (!existingReq) {
+      const req = await prisma.request.create({
         data: {
           quantity: 25,
           priority: 'High',
@@ -158,12 +244,54 @@ async function main() {
           estimatedArrival: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
           latitude: 6.7530,
           longitude: 125.3560,
-          itemId: sampleItem.id,
+          itemId: chairItem.id,
           requestedById: staffUser.id,
           organizationId: org.id,
         },
       });
-      console.log('✅ Sample in-transit request seeded.');
+      await prisma.auditLog.create({
+        data: {
+          actionType: 'APPROVAL',
+          description: `Approved request for 25 units of ${chairItem.name}. Dispatched logistics shipment to Digos City Central HQ.`,
+          requestId: req.id,
+          ipAddress: '127.0.0.1',
+          userId: managerUser.id,
+          organizationId: org.id,
+        },
+      });
+      console.log('✅ Seeded APPROVED request (In-transit parcel tracking to Digos City).');
+    }
+  }
+
+  // 4d. REJECTED request (TC-RW-04: Rejection with recorded reason and manager)
+  if (mouseItem) {
+    const existingReq = await prisma.request.findFirst({
+      where: { itemId: mouseItem.id, status: 'REJECTED', organizationId: org.id },
+    });
+    if (!existingReq) {
+      const req = await prisma.request.create({
+        data: {
+          quantity: 250,
+          priority: 'Low',
+          justification: 'Requested bulk surplus mouse units for auxiliary warehouse backup.',
+          status: 'REJECTED',
+          reviewNotes: 'Rejected: Requested quantity of 250 units exceeds quarterly budget allocation limits for peripherals.',
+          itemId: mouseItem.id,
+          requestedById: staffUser.id,
+          organizationId: org.id,
+        },
+      });
+      await prisma.auditLog.create({
+        data: {
+          actionType: 'REJECTION',
+          description: `Rejected request for ${mouseItem.name}: Exceeds quarterly budget allocation limits.`,
+          requestId: req.id,
+          ipAddress: '127.0.0.1',
+          userId: managerUser.id,
+          organizationId: org.id,
+        },
+      });
+      console.log('✅ Seeded REJECTED request (TC-RW-04: Recorded reason & manager).');
     }
   }
 

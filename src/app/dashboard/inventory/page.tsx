@@ -32,5 +32,5 @@ export default async function InventoryPage() {
     };
   });
 
-  return <InventoryClient initialItems={items} />;
+  return <InventoryClient initialItems={items} userRole={user.role} />;
 }
