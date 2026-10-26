@@ -6,15 +6,24 @@ import { cookies } from 'next/headers';
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const email = formData.get('email') as string;
+    const rawEmail = formData.get('email') as string;
     const password = formData.get('password') as string;
 
-    if (!email || !password) {
+    if (!rawEmail || !password) {
       return NextResponse.redirect(new URL('/?error=missing_fields', request.url));
     }
 
-    // Find User
-    const user = await prisma.user.findUnique({ where: { email } });
+    const email = rawEmail.trim().toLowerCase();
+
+    // Find User (case-insensitive email)
+    const user = await prisma.user.findFirst({ 
+      where: { 
+        email: {
+          equals: email
+        } 
+      } 
+    });
+
     if (!user) {
       return NextResponse.redirect(new URL('/?error=invalid_credentials', request.url));
     }
@@ -25,11 +34,21 @@ export async function POST(request: Request) {
       return NextResponse.redirect(new URL('/?error=invalid_credentials', request.url));
     }
 
-    // Redirect to dashboard on success
+    // Redirect to dashboard on success with root-scoped cookies
     const response = NextResponse.redirect(new URL('/dashboard', request.url), 303);
-    response.cookies.set('session_user', user.id, { httpOnly: true });
+    response.cookies.set('session_user', user.id, { 
+      httpOnly: true, 
+      path: '/',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7 // 7 days
+    });
     if (user.organizationId) {
-      response.cookies.set('session_org', user.organizationId, { httpOnly: true });
+      response.cookies.set('session_org', user.organizationId, { 
+        httpOnly: true, 
+        path: '/',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7
+      });
     }
     return response;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect, useTransition } from 'react';
 import Link from 'next/link';
 import { 
   Package, 
@@ -13,8 +13,13 @@ import {
   Plus, 
   Download,
   Check,
-  Shield
+  Shield,
+  Sparkles,
+  Zap,
+  Clock,
+  ArrowRight
 } from 'lucide-react';
+import { autoRestockItem, autoRestockAllLowStock } from '@/app/actions';
 
 export interface InventoryItemData {
   id: string; // SKU
@@ -27,6 +32,11 @@ export interface InventoryItemData {
   warehouse: string;
   date: string;
   status: string; // 'In Stock' | 'Low Stock' | 'Out of Stock'
+  pendingRequest?: {
+    id: string;
+    quantity: number;
+    priority: string;
+  } | null;
 }
 
 interface InventoryClientProps {
@@ -35,50 +45,81 @@ interface InventoryClientProps {
 }
 
 export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_STAFF' }: InventoryClientProps) {
+  const [items, setItems] = useState<InventoryItemData[]>(initialItems);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'In Stock' | 'Low Stock' | 'Out of Stock'>('All');
   const [selectedWarehouse, setSelectedWarehouse] = useState('All Warehouses');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   const [currentPage, setCurrentPage] = useState(1);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [restockNotice, setRestockNotice] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const itemsPerPage = 8;
+
+  // Sync state if initialItems changes
+  useEffect(() => {
+    setItems(initialItems);
+  }, [initialItems]);
+
+  // Keyboard shortcut: '/' focuses search input
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === '/' && 
+        document.activeElement !== searchInputRef.current && 
+        !(document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement)
+      ) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Extract unique warehouses and categories
   const warehouses = useMemo(() => {
     const set = new Set<string>();
-    initialItems.forEach(i => { if (i.warehouse) set.add(i.warehouse); });
+    items.forEach(i => { if (i.warehouse) set.add(i.warehouse); });
     return ['All Warehouses', ...Array.from(set)];
-  }, [initialItems]);
+  }, [items]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
-    initialItems.forEach(i => { if (i.category) set.add(i.category); });
+    items.forEach(i => { if (i.category) set.add(i.category); });
     return ['All Categories', ...Array.from(set)];
-  }, [initialItems]);
+  }, [items]);
 
   // Overall counts
-  const totalItemsCount = initialItems.length;
-  const inStockCount = initialItems.filter(i => i.status === 'In Stock').length;
-  const lowStockCount = initialItems.filter(i => i.status === 'Low Stock').length;
-  const outOfStockCount = initialItems.filter(i => i.status === 'Out of Stock').length;
+  const totalItemsCount = items.length;
+  const inStockCount = items.filter(i => i.status === 'In Stock').length;
+  const lowStockCount = items.filter(i => i.status === 'Low Stock').length;
+  const outOfStockCount = items.filter(i => i.status === 'Out of Stock').length;
+
+  const lowStockItems = useMemo(() => {
+    return items.filter(i => i.status === 'Low Stock' || i.status === 'Out of Stock');
+  }, [items]);
+
+  const unrequestedItems = useMemo(() => {
+    return lowStockItems.filter(i => !i.pendingRequest);
+  }, [lowStockItems]);
+
+  const pendingCount = lowStockItems.length - unrequestedItems.length;
 
   // Filter items dynamically
   const filteredItems = useMemo(() => {
-    return initialItems.filter(item => {
-      // Status filter
+    return items.filter(item => {
       if (statusFilter !== 'All' && item.status !== statusFilter) {
         return false;
       }
-      // Warehouse filter
       if (selectedWarehouse !== 'All Warehouses' && item.warehouse !== selectedWarehouse) {
         return false;
       }
-      // Category filter
       if (selectedCategory !== 'All Categories' && item.category !== selectedCategory) {
         return false;
       }
-      // Search query
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
         const matchesName = item.name.toLowerCase().includes(query);
@@ -91,7 +132,7 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
       }
       return true;
     });
-  }, [initialItems, statusFilter, selectedWarehouse, selectedCategory, searchQuery]);
+  }, [items, statusFilter, selectedWarehouse, selectedCategory, searchQuery]);
 
   // Pagination calculation
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / itemsPerPage));
@@ -100,6 +141,51 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
     return filteredItems.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredItems, currentPage, itemsPerPage]);
 
+  // 1-Click Auto Restock single item
+  const handleAutoRestock = (dbId: string, itemName: string) => {
+    if (userRole === 'AUDITOR') return;
+    startTransition(async () => {
+      try {
+        const res = await autoRestockItem(dbId);
+        setItems(prev => prev.map(i => i.dbId === dbId ? {
+          ...i,
+          pendingRequest: { id: res.requestId, quantity: res.quantity, priority: 'High' }
+        } : i));
+        setRestockNotice(`Auto-generated restocking request for ${res.itemName} (+${res.quantity} units)! Awaiting Procurement Manager approval.`);
+      } catch (err: unknown) {
+        setRestockNotice(err instanceof Error ? err.message : 'Failed to restock');
+      } finally {
+        setTimeout(() => setRestockNotice(null), 5000);
+      }
+    });
+  };
+
+  // Batch Auto Restock all low stock items
+  const handleBatchAutoRestock = () => {
+    if (userRole === 'AUDITOR') return;
+    startTransition(async () => {
+      try {
+        const res = await autoRestockAllLowStock();
+        // Mark all unrequested items as having pending requests locally
+        setItems(prev => prev.map(i => {
+          if ((i.status === 'Low Stock' || i.status === 'Out of Stock') && !i.pendingRequest) {
+            const quantity = Math.max(i.stockMax - i.stock, i.threshold * 2);
+            return {
+              ...i,
+              pendingRequest: { id: 'pending-batch', quantity, priority: i.stock === 0 ? 'High' : 'Medium' }
+            };
+          }
+          return i;
+        }));
+        setRestockNotice(res.message + ' Requests are now in the pipeline awaiting Manager approval.');
+      } catch (err: unknown) {
+        setRestockNotice(err instanceof Error ? err.message : 'Batch restock failed');
+      } finally {
+        setTimeout(() => setRestockNotice(null), 5500);
+      }
+    });
+  };
+
   // Export CSV handler
   const handleExportCSV = () => {
     if (filteredItems.length === 0) {
@@ -107,7 +193,7 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
       return;
     }
 
-    const headers = ['Item SKU', 'Item Name', 'Category', 'Current Stock', 'Max Stock', 'Min Threshold', 'Warehouse', 'Status'];
+    const headers = ['Item SKU', 'Item Name', 'Category', 'Current Stock', 'Max Stock', 'Min Threshold', 'Warehouse', 'Status', 'Pending Request'];
     const rows = filteredItems.map(item => [
       `"${item.id.replace(/"/g, '""')}"`,
       `"${item.name.replace(/"/g, '""')}"`,
@@ -116,7 +202,8 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
       item.stockMax,
       item.threshold,
       `"${item.warehouse.replace(/"/g, '""')}"`,
-      `"${item.status}"`
+      `"${item.status}"`,
+      item.pendingRequest ? `"Pending (+${item.pendingRequest.quantity} units)"` : '"None"'
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\r\n');
@@ -174,7 +261,62 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
             <Check className="w-4 h-4 text-emerald-600" />
             {exportNotice}
           </div>
-          <button onClick={() => setExportNotice(null)} className="text-emerald-600 hover:text-emerald-900 text-xs">Dismiss</button>
+          <button onClick={() => setExportNotice(null)} className="text-emerald-600 hover:text-emerald-900 text-xs font-bold">Dismiss</button>
+        </div>
+      )}
+
+      {/* Restock notification toast */}
+      {restockNotice && (
+        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 rounded-xl flex items-center justify-between text-sm font-bold shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+            <span>{restockNotice}</span>
+          </div>
+          <button onClick={() => setRestockNotice(null)} className="text-blue-600 hover:text-blue-900 text-xs font-bold">Dismiss</button>
+        </div>
+      )}
+
+      {/* Automated Restock Quick Action Banner (When low stock items exist) */}
+      {(lowStockCount > 0 || outOfStockCount > 0) && userRole !== 'AUDITOR' && (
+        <div className="mb-8 p-5 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200 dark:border-amber-800/60 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Zap className="w-5 h-5 fill-current" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                {unrequestedItems.length > 0
+                  ? `Automated Restock Engine: ${unrequestedItems.length} ${unrequestedItems.length === 1 ? 'item needs' : 'items need'} restock requests generated`
+                  : `Restock Pipeline Active: All ${pendingCount} low-stock items have pending requests submitted`}
+              </h4>
+              <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                {unrequestedItems.length > 0
+                  ? `Auto-calculate replenishment volumes and generate procurement requests in one click (${pendingCount} already awaiting manager approval).`
+                  : `Restock requests are currently awaiting Procurement Manager review in the Approvals queue. Once approved, stock will be added and logistics dispatched.`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {unrequestedItems.length > 0 ? (
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={handleBatchAutoRestock}
+                className="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all hover:shadow active:scale-95 flex items-center justify-center gap-2 shrink-0 disabled:opacity-50"
+              >
+                <Sparkles className="w-4 h-4" />
+                {isPending ? 'Generating Requests...' : `Auto-Restock ${unrequestedItems.length} Items`}
+              </button>
+            ) : (
+              <Link
+                href={userRole === 'PROCUREMENT_MANAGER' || userRole === 'ADMIN' ? '/dashboard/approvals' : '/dashboard/requests'}
+                className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 shrink-0"
+              >
+                {userRole === 'PROCUREMENT_MANAGER' || userRole === 'ADMIN' ? 'Review in Approvals Queue' : 'View Pipeline Requests'}
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            )}
+          </div>
         </div>
       )}
 
@@ -250,16 +392,20 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
         {/* Filters Bar */}
         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50/50 dark:bg-slate-800/50">
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            {/* Search Input */}
-            <div className="relative w-full md:w-64">
+            {/* Search Input with Keyboard Shortcut hint */}
+            <div className="relative w-full md:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
+                ref={searchInputRef}
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                placeholder="Search items or SKU..." 
-                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                placeholder="Search items, SKU, category..." 
+                className="w-full pl-9 pr-10 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
               />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded pointer-events-none">
+                /
+              </span>
             </div>
 
             {/* Warehouse Dropdown */}
@@ -293,7 +439,7 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
             </div>
           </div>
           
-          {/* Status Segmented Buttons (All, In Stock, Low Stock, Out of Stock) */}
+          {/* Status Segmented Buttons */}
           <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1 w-full md:w-auto overflow-x-auto shadow-sm">
             {(['All', 'In Stock', 'Low Stock', 'Out of Stock'] as const).map((tab) => {
               const isActive = statusFilter === tab;
@@ -332,7 +478,7 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
               </button>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[850px]">
+            <table className="w-full text-left border-collapse min-w-[980px]">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
                   <th className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-slate-100">Item SKU</th>
@@ -342,6 +488,7 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
                   <th className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-slate-100">Min. Threshold</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-slate-100">Warehouse</th>
                   <th className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-slate-100">Status</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-900 dark:text-slate-100 text-right">Replenishment Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
@@ -386,6 +533,29 @@ export default function InventoryClient({ initialItems, userRole = 'WAREHOUSE_ST
                       }`}>
                         {item.status}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {userRole !== 'AUDITOR' && item.pendingRequest ? (
+                        <Link
+                          href={`/dashboard/requests/${item.pendingRequest.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors shadow-sm"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Req #{item.pendingRequest.id.slice(0, 8).toUpperCase()} Pending (+{item.pendingRequest.quantity})</span>
+                        </Link>
+                      ) : userRole !== 'AUDITOR' && (item.status === 'Low Stock' || item.status === 'Out of Stock') ? (
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => handleAutoRestock(item.dbId, item.name)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          1-Click Restock (+{item.stockMax - item.stock})
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400 font-semibold">Optimal</span>
+                      )}
                     </td>
                   </tr>
                 ))}

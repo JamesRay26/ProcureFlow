@@ -153,7 +153,7 @@ export default async function RequestDetailsPage({ params }: { params: { id: str
                         ? 'text-amber-800 bg-amber-50 dark:bg-amber-900/40 dark:text-amber-300'
                         : 'text-blue-700 bg-blue-50 dark:bg-blue-900/40 dark:text-blue-300'
                     }`}>
-                      {isReturned ? '⚠️ Returned: Requester can correct and resubmit (TC-RW-05)' : '✏️ Order Pending: Editable by Requester'}
+                      {isReturned ? 'Returned for Revision: Requester can correct and resubmit (TC-RW-05)' : 'Order Pending: Editable by Requester'}
                     </span>
                   </div>
                   <EditRequestForm 
@@ -221,6 +221,8 @@ export default async function RequestDetailsPage({ params }: { params: { id: str
               threshold={req.item.threshold}
               warehouseName={req.item.warehouse}
               isApproved={isApproved}
+              initialCheckpoint={req.currentCheckpoint || 1}
+              userRole={user.role}
             />
           ) : (
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-12 text-center shadow-sm">

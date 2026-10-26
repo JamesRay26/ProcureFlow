@@ -10,7 +10,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Package, FileText, CheckCircle, ScrollText, Users, Settings, Shield, UserCheck } from 'lucide-react';
+import { LayoutDashboard, Package, FileText, CheckCircle, ScrollText, Users, Settings, Shield, UserCheck, ScanBarcode, Truck } from 'lucide-react';
 
 export default function SidebarNav({ 
   role = 'WAREHOUSE_STAFF', 
@@ -47,6 +47,7 @@ export default function SidebarNav({
     });
   }
 
+  navItems.push({ name: 'Tracking & Scanner', href: '/dashboard/tracking', icon: Truck });
   navItems.push({ name: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText });
 
   const isActive = (href: string, exact: boolean = false) => {
@@ -56,39 +57,48 @@ export default function SidebarNav({
     return pathname.startsWith(href);
   };
 
+  // Role display config — no emojis, bold text with color-coded dot
+  const roleConfig: Record<string, { label: string; color: string; dotColor: string }> = {
+    ADMIN: { label: 'System Administrator', color: 'text-slate-700 dark:text-slate-200', dotColor: 'bg-indigo-500' },
+    SYSTEM_ADMIN: { label: 'System Administrator', color: 'text-slate-700 dark:text-slate-200', dotColor: 'bg-indigo-500' },
+    PROCUREMENT_MANAGER: { label: 'Procurement Manager', color: 'text-slate-700 dark:text-slate-200', dotColor: 'bg-blue-500' },
+    WAREHOUSE_STAFF: { label: 'Warehouse Staff', color: 'text-slate-700 dark:text-slate-200', dotColor: 'bg-emerald-500' },
+    AUDITOR: { label: 'Auditor (Read-Only)', color: 'text-slate-700 dark:text-slate-200', dotColor: 'bg-purple-500' },
+  };
+
+  const currentRole = roleConfig[role] || roleConfig['WAREHOUSE_STAFF'];
+
   return (
     <>
       {/* Current Active Role Badge */}
-      <div className="mb-6 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+      <div className="mb-6 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800">
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1.5">
           Active Role
         </span>
-        <div className="flex items-center gap-1.5 font-bold text-xs">
-          {isAdmin && <span className="text-indigo-600 dark:text-indigo-400">👑 System Admin</span>}
-          {isManager && <span className="text-blue-600 dark:text-blue-400">💼 Procurement Manager</span>}
-          {isStaff && <span className="text-emerald-600 dark:text-emerald-400">📦 Warehouse Staff</span>}
-          {isAuditor && <span className="text-purple-600 dark:text-purple-400">🛡️ Auditor (Read-Only)</span>}
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${currentRole.dotColor} shrink-0`}></span>
+          <span className={`font-bold text-xs ${currentRole.color}`}>{currentRole.label}</span>
         </div>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-2">
+      <nav className="flex-1 flex flex-col gap-1">
         {navItems.map((item: { name: string; href: string; icon: React.ElementType; exact?: boolean; badge?: number }) => {
           const active = isActive(item.href, item.exact);
           return (
             <Link 
               key={item.name}
               href={item.href} 
-              className={`flex items-center justify-between px-4 py-3 font-bold transition-colors ${
+              className={`flex items-center justify-between px-3.5 py-2.5 font-medium transition-colors rounded-lg text-sm ${
                 active 
-                  ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-l-4 border-blue-600 rounded-r-xl' 
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-700 dark:hover:text-blue-400 rounded-xl'
+                  ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold' 
+                  : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-700 dark:hover:text-slate-300'
               }`}
             >
               <div className="flex items-center gap-3">
-                <item.icon className="w-5 h-5" /> {item.name}
+                <item.icon className="w-[18px] h-[18px]" /> {item.name}
               </div>
               {item.badge && (
-                <span className="flex items-center justify-center w-5 h-5 bg-red-500 text-[10px] text-white rounded-full">
+                <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-500 text-[10px] text-white rounded-full font-bold">
                   {item.badge}
                 </span>
               )}
@@ -99,26 +109,26 @@ export default function SidebarNav({
 
       {isAdmin && (
         <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-          <p className="px-4 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Admin Tools</p>
+          <p className="px-3.5 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Administration</p>
           <Link 
             href="/dashboard/team" 
-            className={`flex items-center gap-3 px-4 py-3 font-bold transition-colors ${
+            className={`flex items-center gap-3 px-3.5 py-2.5 font-medium text-sm transition-colors rounded-lg ${
               pathname.startsWith('/dashboard/team')
-                ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 border-l-4 border-indigo-600 rounded-r-xl' 
-                : 'text-slate-600 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400 rounded-xl'
+                ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold' 
+                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Users className="w-5 h-5" /> Manage Team
+            <Users className="w-[18px] h-[18px]" /> Manage Team
           </Link>
           <Link 
             href="/dashboard/settings" 
-            className={`flex items-center gap-3 px-4 py-3 font-bold transition-colors ${
+            className={`flex items-center gap-3 px-3.5 py-2.5 font-medium text-sm transition-colors rounded-lg ${
               pathname.startsWith('/dashboard/settings')
-                ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-200 border-l-4 border-slate-500 rounded-r-xl' 
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 rounded-xl'
+                ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold' 
+                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
-            <Settings className="w-5 h-5" /> Settings
+            <Settings className="w-[18px] h-[18px]" /> Settings
           </Link>
         </div>
       )}

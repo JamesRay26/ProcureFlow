@@ -62,7 +62,7 @@ export default async function ApprovalsPage() {
       priority: req.priority,
       status: req.status, // PENDING, APPROVED, REJECTED, RETURNED
       reviewNotes: req.reviewNotes || undefined,
-      price: `$${(req.item.maxStock * 10).toLocaleString()}`,
+      price: `₱${(req.item.maxStock * 550).toLocaleString()}`,
       desc: req.item.category,
       qty: req.quantity,
       date: new Date(req.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),

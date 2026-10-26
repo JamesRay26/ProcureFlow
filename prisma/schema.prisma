@@ -19,6 +19,7 @@ model Organization {
   inventoryItems InventoryItem[]
   requests       Request[]
   auditLogs      AuditLog[]
+  scans          ShipmentScan[]
 }
 
 model User {
@@ -31,6 +32,7 @@ model User {
   organization   Organization? @relation(fields: [organizationId], references: [id])
   requests       Request[]     @relation("RequestsCreated")
   auditLogs      AuditLog[]
+  scans          ShipmentScan[]
 
   // Week 7 Checklist: Strategic B-Tree Indexing on Foreign Keys
   @@index([organizationId])
@@ -82,6 +84,7 @@ model Request {
   estimatedArrival DateTime?
   latitude       Float?
   longitude      Float?
+  currentCheckpoint Int        @default(1)
   
   // Relations
   itemId         String
@@ -92,6 +95,7 @@ model Request {
   
   organizationId String
   organization   Organization  @relation(fields: [organizationId], references: [id])
+  scans          ShipmentScan[]
 
   // Week 7 Checklist: Strategic B-Tree Indexing on Foreign Keys & Left-Prefix Compound Index
   @@index([organizationId])
@@ -118,4 +122,28 @@ model AuditLog {
   @@index([organizationId])
   @@index([userId])
   @@index([requestId])
+}
+
+model ShipmentScan {
+  id             String       @id @default(uuid())
+  requestId      String
+  request        Request      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  checkpointStep Int          // 1: Regional Depot, 2: Digos North Sorting Hub, 3: Quezon Ave Gateway, 4: Digos Central Warehouse
+  checkpointName String
+  location       String
+  action         String       // CHECK_IN, SORTED, DISPATCHED, DELIVERED
+  notes          String?
+  latitude       Float
+  longitude      Float
+  scannedAt      DateTime     @default(now())
+  
+  scannedById    String
+  scannedBy      User         @relation(fields: [scannedById], references: [id])
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([requestId])
+  @@index([organizationId])
+  @@index([scannedById])
 }

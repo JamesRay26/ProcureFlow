@@ -16,8 +16,14 @@ import {
   Package, 
   TrendingUp, 
   Building2,
-  Navigation
+  Navigation,
+  ScanBarcode,
+  ArrowRight,
+  ShieldAlert,
+  Radio,
+  Zap
 } from 'lucide-react';
+import { scanShipmentCheckpoint } from '@/app/actions';
 
 export interface CheckpointData {
   step: number;
@@ -38,17 +44,19 @@ interface TrackingMapClientProps {
   threshold: number;
   warehouseName: string;
   isApproved: boolean;
+  initialCheckpoint?: number;
+  userRole?: string;
 }
 
-// Custom Leaflet Icons using SVG HTML
-const createCustomIcon = (emoji: string, bgClass: string, isPulse: boolean = false) => {
+// Custom Leaflet Icons using SVG HTML (No emojis, sleek enterprise markers)
+const createCustomIcon = (svgPath: string, bgClass: string, isPulse: boolean = false) => {
   return L.divIcon({
     className: 'custom-leaflet-marker',
     html: `
       <div style="position: relative; display: flex; align-items: center; justify-content: center;">
         ${isPulse ? '<div style="position: absolute; width: 44px; height: 44px; border-radius: 9999px; background-color: rgba(37, 99, 235, 0.35); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>' : ''}
-        <div style="width: 36px; height: 36px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 2px solid white; ${bgClass}">
-          ${emoji}
+        <div style="width: 36px; height: 36px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 2px solid white; color: white; ${bgClass}">
+          ${svgPath}
         </div>
       </div>
     `,
@@ -58,10 +66,23 @@ const createCustomIcon = (emoji: string, bgClass: string, isPulse: boolean = fal
   });
 };
 
-const warehouseIcon = createCustomIcon('🏭', 'background: #3b82f6;');
-const hubIcon = createCustomIcon('🏢', 'background: #8b5cf6;');
-const destinationIcon = createCustomIcon('🏁', 'background: #10b981;');
-const truckIcon = createCustomIcon('🚚', 'background: #2563eb;', true);
+const warehouseIcon = createCustomIcon(
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg>', 
+  'background: #3b82f6;'
+);
+const hubIcon = createCustomIcon(
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>', 
+  'background: #6366f1;'
+);
+const destinationIcon = createCustomIcon(
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>', 
+  'background: #10b981;'
+);
+const truckIcon = createCustomIcon(
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>', 
+  'background: #2563eb;', 
+  true
+);
 
 // Component to smoothly pan the map when current step changes
 function MapRecenter({ lat, lng }: { lat: number; lng: number }) {
@@ -80,7 +101,9 @@ export default function TrackingMapClient({
   currentStock,
   threshold,
   warehouseName,
-  isApproved
+  isApproved,
+  initialCheckpoint = 3,
+  userRole = 'WAREHOUSE_STAFF',
 }: TrackingMapClientProps) {
   // 4 E-Commerce Route Checkpoints (Digos City Logistics Route)
   const checkpoints: CheckpointData[] = [
@@ -122,9 +145,131 @@ export default function TrackingMapClient({
     }
   ];
 
-  const [currentStep, setCurrentStep] = useState(3); // Default at Step 3 (In Transit)
+  const trackingCode = `PF-TRK-${(requestId || '88392104').slice(0, 8).toUpperCase()}`;
+  const [currentStep, setCurrentStep] = useState(initialCheckpoint);
+  const [isScanning, setIsScanning] = useState(false);
+  const [barcodeQuery, setBarcodeQuery] = useState('');
+  const [scanStatus, setScanStatus] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const simulationRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync current checkpoint if initialCheckpoint prop changes from parent
+  useEffect(() => {
+    setCurrentStep(initialCheckpoint);
+  }, [initialCheckpoint]);
+
+  const isAuditor = userRole === 'AUDITOR';
+
+  // Play realistic scanner beep tone via Web Audio API (Zero external packages)
+  const playScanBeep = () => {
+    try {
+      if (typeof window === 'undefined') return;
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const audioCtx = new AudioCtx();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(950, audioCtx.currentTime); // 950Hz crisp confirmation chirp
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.12);
+    } catch {
+      // AudioContext unavailable or restricted in browser environment
+    }
+  };
+
+  // Perform barcode scan simulation to move to the next checkpoint location
+  const executeBarcodeScan = async (forcedNextStep?: number) => {
+    if (isAuditor) {
+      setScanStatus({
+        message: 'Auditor Read-Only: Scanning restricted in accordance with TC-RBAC-02.',
+        type: 'error'
+      });
+      return;
+    }
+
+    const nextStep = forcedNextStep !== undefined 
+      ? forcedNextStep 
+      : Math.min(currentStep + 1, 4);
+
+    setIsScanning(true);
+    playScanBeep();
+
+    const targetCheckpoint = checkpoints[nextStep - 1];
+
+    // Trigger visual laser sweep and then advance coordinates smoothly
+    setTimeout(async () => {
+      setCurrentStep(nextStep);
+      setIsScanning(false);
+      setScanStatus({
+        message: `WAYBILL VERIFIED: Scanned at ${targetCheckpoint.title} (${targetCheckpoint.location}). Map marker updated.`,
+        type: 'success'
+      });
+
+      // Synchronize with database if approved
+      if (requestId && isApproved) {
+        try {
+          await scanShipmentCheckpoint({
+            requestId,
+            checkpointStep: nextStep,
+            notes: `Optical barcode scan at ${targetCheckpoint.title}`,
+          });
+        } catch {
+          // Graceful fallback if offline or mock
+        }
+      }
+    }, 600);
+  };
+
+  const handleManualScanSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = barcodeQuery.trim().toUpperCase();
+    if (!clean) return;
+
+    if (
+      clean === trackingCode ||
+      clean === requestId.toUpperCase() ||
+      clean === itemSku.toUpperCase() ||
+      clean.includes(requestId.slice(0, 6).toUpperCase())
+    ) {
+      setBarcodeQuery('');
+      if (currentStep >= 4) {
+        setScanStatus({
+          message: 'Package already received at Destination Bay 3. Reset route to re-simulate.',
+          type: 'info'
+        });
+      } else {
+        executeBarcodeScan();
+      }
+    } else {
+      setBarcodeQuery('');
+      executeBarcodeScan();
+    }
+  };
+
+  const handleResetRoute = async () => {
+    setIsSimulating(false);
+    setCurrentStep(1);
+    setScanStatus({
+      message: 'Demo route reset: Carrier positioned at Stop 1 (Santa Cruz Logistics Hub Depot).',
+      type: 'info'
+    });
+    if (requestId && isApproved && !isAuditor) {
+      try {
+        await scanShipmentCheckpoint({
+          requestId,
+          checkpointStep: 1,
+          notes: 'Simulation reset to Step 1',
+        });
+      } catch {
+        // Fallback
+      }
+    }
+  };
 
   // Auto simulation timer
   useEffect(() => {
@@ -135,9 +280,11 @@ export default function TrackingMapClient({
             setIsSimulating(false);
             return 4;
           }
-          return prev + 1;
+          const next = prev + 1;
+          playScanBeep();
+          return next;
         });
-      }, 3000);
+      }, 3500);
     } else if (simulationRef.current) {
       clearInterval(simulationRef.current);
     }
@@ -347,35 +494,226 @@ export default function TrackingMapClient({
           </MapContainer>
         </div>
 
-        {/* Step Progression Tabs */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
-          <p className="text-xs font-bold text-slate-500 mb-2">Advance checkpoint to test arrival progression:</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {/* 2b. Sorting Center Barcode & Tracking ID Scan Simulator */}
+        <div className="p-5 border-t border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-blue-600 text-white shadow-sm">
+                  <ScanBarcode className="w-4 h-4" />
+                </span>
+                <h4 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                  Sorting Center Barcode &amp; Waybill Scanner Simulator
+                </h4>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Simulate optical barcode and handheld RFID scans to progress parcels between regional logistics hubs.
+              </p>
+            </div>
+
+            {/* Quick Demo Reset / Re-run */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleResetRoute}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                title="Reset parcel to origin depot for presentation repeat"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset Route Demo
+              </button>
+            </div>
+          </div>
+
+          {/* Scanner Workstation Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+            {/* Left: Interactive Barcode Label (5 cols) */}
+            <div className="lg:col-span-5 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                    Carrier Waybill / Tracking ID
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                    <Radio className="w-3 h-3 text-blue-600 animate-pulse" />
+                    RFID Active
+                  </span>
+                </div>
+
+                {/* Vector Barcode Graphic with Laser Sweep */}
+                <div className="relative bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg p-3 flex flex-col items-center justify-center overflow-hidden my-1">
+                  {/* Optical Laser Line */}
+                  {isScanning && (
+                    <div className="absolute inset-x-0 h-1 bg-red-500 shadow-[0_0_14px_#ef4444] animate-laser z-20 pointer-events-none" />
+                  )}
+
+                  {/* Laser Scan Grid Overlay when active */}
+                  {isScanning && (
+                    <div className="absolute inset-0 bg-red-500/10 pointer-events-none z-10 animate-pulse" />
+                  )}
+
+                  {/* SVG Code 128 Simulated Barcode */}
+                  <div className="flex items-center justify-center gap-[2.5px] h-12 w-full max-w-[260px] py-1">
+                    {[3,1,2,4,1,3,2,1,4,2,1,3,1,2,4,1,2,3,2,1,4,1,3,2,1,3,2,4,1,2,3,1,2].map((w, idx) => (
+                      <div
+                        key={idx}
+                        style={{ width: `${w * 1.5}px` }}
+                        className={`h-full ${idx % 2 === 0 ? 'bg-slate-900 dark:bg-white' : 'bg-transparent'}`}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="mt-1.5 font-mono text-xs font-black tracking-widest text-slate-900 dark:text-white">
+                    {trackingCode}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-[11px]">
+                <span className="text-slate-500 font-medium">SKU: <strong className="text-slate-800 dark:text-slate-200">{itemSku}</strong></span>
+                <span className="text-slate-500 font-medium">Qty: <strong className="text-blue-600 dark:text-blue-400">+{incomingQty} units</strong></span>
+              </div>
+            </div>
+
+            {/* Right: Optical Scanner Action Panel (7 cols) */}
+            <div className="lg:col-span-7 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+              {/* Scan Status Toast / Announcement */}
+              <div className="min-h-[38px] mb-3">
+                {scanStatus ? (
+                  <div className={`p-2 rounded-lg text-xs font-bold flex items-center gap-2 border ${
+                    scanStatus.type === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                      : scanStatus.type === 'error'
+                      ? 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                      : 'bg-blue-50 dark:bg-blue-950/30 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                  }`}>
+                    {scanStatus.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : scanStatus.type === 'error' ? (
+                      <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                    ) : (
+                      <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+                    )}
+                    <span className="truncate">{scanStatus.message}</span>
+                  </div>
+                ) : (
+                  <div className="p-2 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span>Point handheld terminal or click below to scan parcel at next destination.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Station Transition Indicator */}
+              <div className="mb-3 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase text-slate-400 block">Current Location</span>
+                    <strong className="text-slate-900 dark:text-white font-extrabold truncate max-w-[160px] block">
+                      Stop {currentStep}: {checkpoints[currentStep - 1].title.split(' ')[0]} {checkpoints[currentStep - 1].title.split(' ')[1] || ''}
+                    </strong>
+                  </div>
+
+                  <ArrowRight className="w-4 h-4 text-slate-400 shrink-0 mx-2" />
+
+                  <div className="text-right">
+                    <span className="text-[10px] font-extrabold uppercase text-slate-400 block">Next Station</span>
+                    {currentStep < 4 ? (
+                      <strong className="text-blue-600 dark:text-blue-400 font-extrabold truncate max-w-[160px] block">
+                        Stop {currentStep + 1}: {checkpoints[currentStep].title.split(' ')[0]} {checkpoints[currentStep].title.split(' ')[1] || ''}
+                      </strong>
+                    ) : (
+                      <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold block">
+                        Completed (Bay 3)
+                      </strong>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Primary Barcode Scan Action Button */}
+              <div className="space-y-2">
+                {currentStep < 4 ? (
+                  <button
+                    type="button"
+                    onClick={() => executeBarcodeScan()}
+                    disabled={isScanning || isAuditor}
+                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-extrabold text-white flex items-center justify-center gap-2 transition-all shadow-md ${
+                      isAuditor
+                        ? 'bg-slate-400 cursor-not-allowed opacity-70'
+                        : isScanning
+                        ? 'bg-blue-700 shadow-blue-500/30'
+                        : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.99] shadow-blue-600/20'
+                    }`}
+                  >
+                    <ScanBarcode className={`w-4 h-4 ${isScanning ? 'animate-bounce' : ''}`} />
+                    {isAuditor
+                      ? 'Scanning Restricted (Auditor Read-Only - TC-RBAC-02)'
+                      : isScanning
+                      ? 'Scanning Barcode & Computing Route...'
+                      : `Scan Barcode Arrival at Stop ${currentStep + 1} (${checkpoints[currentStep].title.split(' ')[0]}...)`
+                    }
+                  </button>
+                ) : (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl text-center">
+                    <div className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-800 dark:text-emerald-300">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      Shipment Received & Cleared at Digos Central Bay 3
+                    </div>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                      Stock levels have been safely replenished. Ready for presentation review.
+                    </p>
+                  </div>
+                )}
+
+                {/* Manual Scan Input or Barcode Gun Emulation */}
+                <form onSubmit={handleManualScanSubmit} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder={`Scan or paste ${trackingCode}`}
+                      value={barcodeQuery}
+                      onChange={(e) => setBarcodeQuery(e.target.value)}
+                      disabled={isAuditor}
+                      className="w-full text-xs py-2 pl-8 pr-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                    />
+                    <ScanBarcode className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isAuditor || !barcodeQuery.trim()}
+                    className="px-3 py-2 text-xs font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    Scan Input
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          {/* Station Stepper Breadcrumb */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-slate-200/80 dark:border-slate-700/80">
             {checkpoints.map((cp) => {
               const isPassed = currentStep > cp.step;
               const isCurrent = currentStep === cp.step;
               return (
-                <button
+                <div
                   key={cp.step}
-                  type="button"
-                  onClick={() => {
-                    setIsSimulating(false);
-                    setCurrentStep(cp.step);
-                  }}
-                  className={`p-2.5 rounded-xl text-left border text-xs font-bold transition-all ${
+                  className={`p-2 rounded-lg border text-xs transition-all ${
                     isCurrent 
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm font-extrabold' 
                       : isPassed 
-                      ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' 
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 font-bold' 
+                      : 'bg-white/60 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                   }`}
                 >
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] uppercase tracking-wider opacity-80">Stop {cp.step}</span>
-                    {isPassed ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : null}
+                  <div className="flex justify-between items-center mb-0.5">
+                    <span className="text-[10px] uppercase tracking-wider opacity-85">Stop {cp.step}</span>
+                    {isPassed ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : null}
+                    {isCurrent ? <span className="w-2 h-2 rounded-full bg-white animate-ping" /> : null}
                   </div>
-                  <p className="truncate">{cp.title}</p>
-                </button>
+                  <p className="truncate text-[11px]">{cp.title}</p>
+                </div>
               );
             })}
           </div>

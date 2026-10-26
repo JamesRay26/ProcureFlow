@@ -21,6 +21,7 @@ import {
   requestUpdateSchema,
   approvalActionSchema 
 } from '@/lib/validations';
+import { LOGISTICS_CHECKPOINTS } from '@/lib/logistics';
 
 /**
  * TC-RBAC-02: Read-Only enforcement for Auditor role
@@ -450,22 +451,341 @@ export async function updateRequestDetails(requestId: string, quantity: number, 
 }
 
 /**
- * Switch User Role (Fast Testing & Grading)
- * Allows 1-click role switching between test accounts
+ * Admin Action: Update Organization Name
+ * Only accessible by ADMIN role
  */
-export async function switchUserRole(targetEmail: string) {
-  const user = await prisma.user.findUnique({ where: { email: targetEmail } });
-  if (!user) throw new Error(`Test account with email ${targetEmail} not found`);
+export async function updateOrganizationName(newName: string) {
+  const user = await getCurrentUser();
+  if (!user || !user.organizationId) throw new Error('Unauthorized');
 
-  const cookieStore = cookies();
-  cookieStore.set('session_user', user.id, { httpOnly: true });
-  if (user.organizationId) {
-    cookieStore.set('session_org', user.organizationId, { httpOnly: true });
+  if (user.role !== 'ADMIN' && user.role !== 'SYSTEM_ADMIN') {
+    throw new Error('Forbidden: Only administrators can change the organization name.');
   }
 
+  if (!newName || newName.trim().length < 2) {
+    throw new Error('Organization name must be at least 2 characters.');
+  }
+
+  await prisma.$transaction([
+    prisma.organization.update({
+      where: { id: user.organizationId },
+      data: { name: newName.trim() },
+    }),
+    prisma.auditLog.create({
+      data: {
+        actionType: 'SETTINGS_CHANGE',
+        description: `Organization name updated to "${newName.trim()}" by ${user.name}.`,
+        ipAddress: getIpAddress(),
+        userId: user.id,
+        organizationId: user.organizationId as string,
+      },
+    }),
+  ]);
+
   revalidatePath('/dashboard');
-  revalidatePath('/dashboard/approvals');
-  revalidatePath('/dashboard/requests');
-  revalidatePath('/dashboard/inventory');
-  revalidatePath('/dashboard/audit-log');
+  revalidatePath('/dashboard/settings');
 }
+
+/**
+ * Admin Action: Update a team member's role
+ * Only accessible by ADMIN role
+ */
+export async function updateMemberRole(memberId: string, newRole: string) {
+  const user = await getCurrentUser();
+  if (!user || !user.organizationId) throw new Error('Unauthorized');
+
+  if (user.role !== 'ADMIN' && user.role !== 'SYSTEM_ADMIN') {
+    throw new Error('Forbidden: Only administrators can change member roles.');
+  }
+
+  const validRoles = ['ADMIN', 'PROCUREMENT_MANAGER', 'WAREHOUSE_STAFF', 'AUDITOR'];
+  if (!validRoles.includes(newRole)) {
+    throw new Error(`Invalid role: ${newRole}`);
+  }
+
+  const member = await prisma.user.findFirst({
+    where: { id: memberId, organizationId: user.organizationId },
+  });
+  if (!member) throw new Error('Member not found in your organization.');
+
+  // Prevent admin from changing their own role
+  if (member.id === user.id) {
+    throw new Error('You cannot change your own role. Ask another administrator.');
+  }
+
+  const previousRole = member.role;
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: memberId },
+      data: { role: newRole },
+    }),
+    prisma.auditLog.create({
+      data: {
+        actionType: 'ROLE_CHANGE',
+        description: `Role changed for ${member.name} (${member.email}): ${previousRole} -> ${newRole} by ${user.name}.`,
+        ipAddress: getIpAddress(),
+        userId: user.id,
+        organizationId: user.organizationId as string,
+      },
+    }),
+  ]);
+
+  revalidatePath('/dashboard/team');
+  revalidatePath('/dashboard/settings');
+}
+
+/**
+ * Admin Action: Remove a team member from the organization
+ * Only accessible by ADMIN role
+ */
+export async function removeMember(memberId: string) {
+  const user = await getCurrentUser();
+  if (!user || !user.organizationId) throw new Error('Unauthorized');
+
+  if (user.role !== 'ADMIN' && user.role !== 'SYSTEM_ADMIN') {
+    throw new Error('Forbidden: Only administrators can remove team members.');
+  }
+
+  const member = await prisma.user.findFirst({
+    where: { id: memberId, organizationId: user.organizationId },
+  });
+  if (!member) throw new Error('Member not found in your organization.');
+
+  // Prevent admin from removing themselves
+  if (member.id === user.id) {
+    throw new Error('You cannot remove yourself from the organization.');
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: memberId },
+      data: { organizationId: null },
+    }),
+    prisma.auditLog.create({
+      data: {
+        actionType: 'MEMBER_REMOVED',
+        description: `${member.name} (${member.email}, ${member.role}) was removed from the organization by ${user.name}.`,
+        ipAddress: getIpAddress(),
+        userId: user.id,
+        organizationId: user.organizationId as string,
+      },
+    }),
+  ]);
+
+  revalidatePath('/dashboard/team');
+  revalidatePath('/dashboard/settings');
+}
+
+
+/**
+ * Scan a shipment at a sorting center or warehouse checkpoint
+ * Enforces: TC-RBAC-02 (Auditors read-only), ACID transaction, ETA recalculation
+ */
+export async function scanShipmentCheckpoint({
+  requestId,
+  checkpointStep,
+  notes,
+}: {
+  requestId: string;
+  checkpointStep: number;
+  notes?: string;
+}) {
+  const user = await getCurrentUser();
+  if (!user || !user.organizationId) throw new Error('Unauthorized');
+
+  assertNotAuditor(user.role, 'shipment scanning');
+
+  if (checkpointStep < 1 || checkpointStep > 4) {
+    throw new Error('Invalid checkpoint step. Must be between 1 and 4.');
+  }
+
+  const checkpoint = LOGISTICS_CHECKPOINTS[checkpointStep - 1];
+
+  await prisma.$transaction(async (tx) => {
+    const req = await tx.request.findFirst({
+      where: { id: requestId, organizationId: user.organizationId as string },
+      include: { item: true },
+    });
+    if (!req) throw new Error('Shipment request not found');
+
+    if (req.status !== 'APPROVED') {
+      throw new Error('Cannot scan shipment: Restocking request is not in APPROVED status.');
+    }
+
+    const newEta = new Date(Date.now() + checkpoint.etaHours * 60 * 60 * 1000);
+
+    // Update request with new checkpoint, location coordinates, ETA, and shipping status
+    await tx.request.update({
+      where: { id: req.id },
+      data: {
+        currentCheckpoint: checkpointStep,
+        shippingStatus: checkpoint.shippingStatus,
+        latitude: checkpoint.lat,
+        longitude: checkpoint.lng,
+        estimatedArrival: newEta,
+      },
+    });
+
+    // Record shipment scan event
+    await tx.shipmentScan.create({
+      data: {
+        requestId: req.id,
+        checkpointStep,
+        checkpointName: checkpoint.title,
+        location: checkpoint.location,
+        action: checkpoint.action,
+        notes: notes || null,
+        latitude: checkpoint.lat,
+        longitude: checkpoint.lng,
+        scannedById: user.id,
+        organizationId: user.organizationId as string,
+      },
+    });
+
+    // Record in immutable audit trail
+    await tx.auditLog.create({
+      data: {
+        actionType: 'SHIPMENT_SCAN',
+        description: `Shipment #${req.id.slice(0, 8)} scanned at Step ${checkpointStep} (${checkpoint.title}) by ${user.name}. Status: ${checkpoint.shippingStatus}.`,
+        requestId: req.id,
+        ipAddress: getIpAddress(),
+        userId: user.id,
+        organizationId: user.organizationId as string,
+      },
+    });
+  });
+
+  revalidatePath('/dashboard/tracking');
+  revalidatePath('/dashboard/requests');
+  revalidatePath(`/dashboard/requests/${requestId}`);
+  revalidatePath('/dashboard/inventory');
+  revalidatePath('/dashboard');
+}
+
+/**
+ * 1-Click Smart Automated Restock for a single inventory item
+ * Auto-calculates optimal quantity: maxStock - currentStock
+ */
+export async function autoRestockItem(itemId: string) {
+  const user = await getCurrentUser();
+  if (!user || !user.organizationId) throw new Error('Unauthorized');
+
+  assertNotAuditor(user.role, 'automated restocking');
+
+  const item = await prisma.inventoryItem.findFirst({
+    where: { id: itemId, organizationId: user.organizationId },
+  });
+  if (!item) throw new Error('Inventory item not found');
+
+  // Calculate optimal replenishment quantity to reach full capacity
+  const quantity = Math.max(item.maxStock - item.stock, item.threshold * 2);
+  const priority = item.stock === 0 ? 'High' : item.stock <= Math.floor(item.threshold / 2) ? 'High' : 'Medium';
+  const justification = `Automated Replenishment: Current stock (${item.stock}) is at or below threshold (${item.threshold}). Auto-calculated +${quantity} units to restore optimal capacity (${item.maxStock}).`;
+
+  let createdId = '';
+
+  await prisma.$transaction(async (tx) => {
+    const req = await tx.request.create({
+      data: {
+        quantity,
+        priority,
+        justification,
+        status: 'PENDING',
+        itemId: item.id,
+        requestedById: user.id,
+        organizationId: user.organizationId as string,
+      },
+    });
+    createdId = req.id;
+
+    await tx.auditLog.create({
+      data: {
+        actionType: 'CREATION',
+        description: `Automated replenishment initiated for ${quantity}x ${item.name} (${item.sku}) by ${user.name}`,
+        requestId: req.id,
+        ipAddress: getIpAddress(),
+        userId: user.id,
+        organizationId: user.organizationId as string,
+      },
+    });
+  });
+
+  revalidatePath('/dashboard/inventory');
+  revalidatePath('/dashboard/requests');
+  revalidatePath('/dashboard');
+
+  return { success: true, requestId: createdId, itemName: item.name, quantity };
+}
+
+/**
+ * Batch Action: Auto-restock ALL items currently below threshold in 1 click
+ */
+export async function autoRestockAllLowStock() {
+  const user = await getCurrentUser();
+  if (!user || !user.organizationId) throw new Error('Unauthorized');
+
+  assertNotAuditor(user.role, 'batch automated restocking');
+
+  const allItems = await prisma.inventoryItem.findMany({
+    where: { organizationId: user.organizationId },
+  });
+
+  const lowStockItems = allItems.filter(i => i.stock <= i.threshold);
+  if (lowStockItems.length === 0) {
+    return { count: 0, message: 'All items are currently at optimal stock levels.' };
+  }
+
+  // Check which items already have pending requests so we avoid redundant duplicates
+  const pendingRequests = await prisma.request.findMany({
+    where: {
+      organizationId: user.organizationId,
+      status: 'PENDING',
+    },
+    select: { itemId: true },
+  });
+  const pendingItemIds = new Set(pendingRequests.map(r => r.itemId));
+
+  const itemsToRestock = lowStockItems.filter(i => !pendingItemIds.has(i.id));
+  if (itemsToRestock.length === 0) {
+    return { count: 0, message: 'All low stock items already have pending restock requests.' };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of itemsToRestock) {
+      const quantity = Math.max(item.maxStock - item.stock, item.threshold * 2);
+      const priority = item.stock === 0 ? 'High' : 'Medium';
+      const justification = `Automated Batch Replenishment: Stock (${item.stock}) <= threshold (${item.threshold}). Replenishing +${quantity} units.`;
+
+      const req = await tx.request.create({
+        data: {
+          quantity,
+          priority,
+          justification,
+          status: 'PENDING',
+          itemId: item.id,
+          requestedById: user.id,
+          organizationId: user.organizationId as string,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actionType: 'CREATION',
+          description: `Batch auto-restock: Created request for ${quantity}x ${item.name} (${item.sku})`,
+          requestId: req.id,
+          ipAddress: getIpAddress(),
+          userId: user.id,
+          organizationId: user.organizationId as string,
+        },
+      });
+    }
+  });
+
+  revalidatePath('/dashboard/inventory');
+  revalidatePath('/dashboard/requests');
+  revalidatePath('/dashboard');
+
+  return { count: itemsToRestock.length, message: `Successfully generated ${itemsToRestock.length} restock requests!` };
+}
+

@@ -4,24 +4,30 @@ import { authOptions } from "@/lib/auth";
 import prisma from '@/lib/prisma';
 
 export async function getCurrentUser() {
-  const session = await getServerSession(authOptions);
   const cookieStore = cookies();
   const manualUserId = cookieStore.get('session_user')?.value;
 
-  if (session?.user?.email) {
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: { organization: true }
-    });
-    return user;
-  }
-
+  // 1. Check manual credentials cookie first
   if (manualUserId) {
     const user = await prisma.user.findUnique({
       where: { id: manualUserId },
       include: { organization: true }
     });
-    return user;
+    if (user) return user;
+  }
+
+  // 2. Check NextAuth OAuth session
+  try {
+    const session = await getServerSession(authOptions);
+    if (session?.user?.email) {
+      const user = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        include: { organization: true }
+      });
+      if (user) return user;
+    }
+  } catch {
+    // NextAuth fallback
   }
 
   return null;

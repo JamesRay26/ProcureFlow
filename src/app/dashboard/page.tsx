@@ -168,16 +168,26 @@ export default async function DashboardPage() {
           </div>
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {criticalStockItems.map((item) => (
-              <div key={item.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-red-100 dark:border-red-800/50 flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-slate-900 dark:text-slate-100">{item.name}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">SKU: {item.sku}</p>
+              <div key={item.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-red-100 dark:border-red-800/50 flex justify-between items-center gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-900 dark:text-slate-100 truncate">{item.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">SKU: {item.sku}</p>
                 </div>
-                <div className="text-right">
-                  <p className={`font-extrabold text-lg ${item.stock === 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                    {item.stock} left
-                  </p>
-                  <p className="text-xs text-slate-500">Threshold: {item.threshold}</p>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right">
+                    <p className={`font-extrabold text-base ${item.stock === 0 ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {item.stock} left
+                    </p>
+                    <p className="text-[10px] text-slate-400">Min: {item.threshold}</p>
+                  </div>
+                  {!isAuditor && (
+                    <Link
+                      href="/dashboard/inventory"
+                      className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg transition-colors shadow-sm"
+                    >
+                      Restock
+                    </Link>
+                  )}
                 </div>
               </div>
             ))}
