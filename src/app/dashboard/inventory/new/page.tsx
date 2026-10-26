@@ -1,114 +1,52 @@
-'use client';
-
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { createInventoryItem } from '@/app/actions';
-import { Save, X } from 'lucide-react';
+import { getCurrentUser } from '@/lib/session';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { ShieldAlert, ArrowLeft } from 'lucide-react';
+import NewInventoryItemClient from './NewInventoryItemClient';
 
-export default function NewInventoryItemPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+export default async function NewInventoryItemPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect('/');
+  if (!user.organizationId) redirect('/dashboard');
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      const formData = new FormData(e.currentTarget);
-      await createInventoryItem(formData);
-      router.push('/dashboard/inventory');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create item');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="mb-6 flex items-center text-sm font-medium text-slate-500">
-        <Link href="/dashboard" className="hover:text-blue-600 transition-colors">Dashboard</Link>
-        <span className="mx-2">&gt;</span>
-        <Link href="/dashboard/inventory" className="hover:text-blue-600 transition-colors">Inventory</Link>
-        <span className="mx-2">&gt;</span>
-        <span className="text-blue-600 font-bold">New Item</span>
-      </div>
-
-      <header className="mb-8">
-        <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white">Add New Inventory Item</h2>
-        <p className="text-slate-500 font-medium mt-1 dark:text-slate-400">Register a new product or asset in the warehouse</p>
-      </header>
-
-      <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-8 max-w-2xl">
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl text-sm font-bold border border-red-100">
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">Item Name</label>
-              <input required type="text" name="name" className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500" placeholder="e.g. Ergonomic Office Chair" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">SKU / ID</label>
-              <input required type="text" name="sku" className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500" placeholder="e.g. FUR-CHR-001" />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">Category</label>
-            <select name="category" className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500">
-              <option value="Electronics">Electronics</option>
-              <option value="Office Supplies">Office Supplies</option>
-              <option value="Office Furniture">Office Furniture</option>
-              <option value="Safety Equipment">Safety Equipment</option>
-              <option value="IT Infrastructure">IT Infrastructure</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-
-          <div className="grid grid-cols-3 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">Initial Stock</label>
-              <input required type="number" name="stock" defaultValue={0} min={0} className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">Max Capacity</label>
-              <input required type="number" name="maxStock" defaultValue={100} min={1} className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">Min Threshold</label>
-              <input required type="number" name="threshold" defaultValue={10} min={1} className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500" />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-2">Warehouse Location</label>
-            <select name="warehouse" className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500">
-              <option value="Main DC">Main DC</option>
-              <option value="East Coast">East Coast</option>
-              <option value="West Coast">West Coast</option>
-              <option value="Manila HQ">Manila HQ</option>
-              <option value="Cebu Branch">Cebu Branch</option>
-            </select>
-          </div>
+  // TC-RBAC-02: Compliance Auditor Read-Only Enforcement
+  // Auditors cannot register new inventory items
+  if (user.role === 'AUDITOR') {
+    return (
+      <div className="max-w-2xl mx-auto mt-12 bg-white dark:bg-slate-800 rounded-2xl border border-red-200 dark:border-red-900/50 shadow-sm p-8 text-center animate-fade-in-up">
+        <div className="w-16 h-16 rounded-2xl bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center mx-auto mb-5 shadow-inner">
+          <ShieldAlert className="w-9 h-9" />
         </div>
-
-        <div className="flex items-center justify-end gap-4 mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
-          <Link href="/dashboard/inventory" className="text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">
-            Cancel
+        <div className="inline-block px-3 py-1 bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 font-mono text-xs font-bold rounded-full mb-3">
+          403 FORBIDDEN &bull; TC-RBAC-02 COMPLIANCE
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
+          Creation Restricted: Auditor Read-Only
+        </h2>
+        <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed mb-6">
+          Logged in as <strong>{user.name} (Auditor)</strong>. Under ProcureFlow compliance policy, Auditors are granted strictly read-only inspection access. You are restricted from adding new items to the inventory.
+        </p>
+        <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-xl text-left border border-slate-200 dark:border-slate-800 mb-6 text-xs text-slate-500 dark:text-slate-400">
+          <p className="font-bold text-slate-700 dark:text-slate-300 mb-1">User Story Verification (TC-RBAC-02):</p>
+          <p>&ldquo;As a compliance auditor, I want read-only access to all requests and audit records so that I can inspect the system without altering data.&rdquo;</p>
+        </div>
+        <div className="flex items-center justify-center gap-3">
+          <Link 
+            href="/dashboard/inventory" 
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-sm transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" /> View Inventory
           </Link>
-          <button type="submit" disabled={loading} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm transition-colors disabled:opacity-50">
-            <Save className="w-4 h-4" /> {loading ? 'Saving...' : 'Save Item'}
-          </button>
+          <Link 
+            href="/dashboard" 
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-sm transition-colors shadow-sm"
+          >
+            Return to Dashboard
+          </Link>
         </div>
-      </form>
-    </>
-  );
+      </div>
+    );
+  }
+
+  return <NewInventoryItemClient />;
 }

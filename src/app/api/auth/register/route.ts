@@ -51,9 +51,19 @@ export async function POST(request: Request) {
     }
 
     const response = NextResponse.redirect(new URL('/dashboard', request.url), 303);
-    response.cookies.set('session_user', newUser.id, { httpOnly: true });
+    response.cookies.set('session_user', newUser.id, { 
+      httpOnly: true, 
+      path: '/',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7
+    });
     if (newUser.organizationId) {
-      response.cookies.set('session_org', newUser.organizationId, { httpOnly: true });
+      response.cookies.set('session_org', newUser.organizationId, { 
+        httpOnly: true, 
+        path: '/',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7
+      });
     }
     return response;
 
